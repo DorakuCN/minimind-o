@@ -598,6 +598,21 @@ function initCall(){
   let ws=null,wsActive=false,proc=null,rtc=null,rtSrc=null,playing=[],turns=0,mn=0;
   let curMsg=null,curText='',segs=[],start=0,ripT=0,sVol=0,asstPlay=false,raf=0;
   let spk=false,userBuf=[];
+  const RT_SAMPLE_RATE=16000,RT_BLOCK=4096;
+  const resamplePcm=(input,inRate,outRate)=>{
+    if(!input.length||inRate===outRate)return input;
+    const outLen=Math.max(1,Math.round(input.length*outRate/inRate));
+    const out=new Float32Array(outLen);
+    const step=inRate/outRate;
+    for(let i=0;i<outLen;i++){
+      const pos=i*step,idx=Math.floor(pos),frac=pos-idx;
+      const a=input[idx]||0;
+      const b=input[Math.min(idx+1,input.length-1)]||a;
+      out[i]=a+(b-a)*frac;
+    }
+    return out;
+  };
+  const floatToI16=input=>{const out=new Int16Array(input.length);for(let i=0;i<input.length;i++)out[i]=Math.max(-32768,Math.min(32767,input[i]*32768));return out};
   const flushUser=()=>{
     if(!userBuf.length)return;
     const dur=userBuf.reduce((a,c)=>a+c.length,0)/16000;
@@ -654,7 +669,7 @@ function initCall(){
   raf=requestAnimationFrame(render);
 
   async function initMic(){
-    try{mic=await navigator.mediaDevices.getUserMedia({audio:true});ac=new AudioContext({sampleRate:24000});const s=ac.createMediaStreamSource(mic);ana=ac.createAnalyser();ana.fftSize=256;s.connect(ana);setSt('','connecting');setConn(false,'connecting')}
+    try{mic=await navigator.mediaDevices.getUserMedia({audio:true});ac=new AudioContext();const s=ac.createMediaStreamSource(mic);ana=ac.createAnalyser();ana.fftSize=256;s.connect(ana);setSt('','connecting');setConn(false,'connecting')}
     catch(e){setSt('','mic error');setConn(false,'mic error')}
   }
 
@@ -669,7 +684,8 @@ function initCall(){
 
   async function startRT(){
     wsActive=true;if(!mic)await initMic();
-    rtc=new AudioContext({sampleRate:16000});rtSrc=rtc.createMediaStreamSource(mic);proc=rtc.createScriptProcessor(4096,1,1);
+    rtc=new AudioContext();rtSrc=rtc.createMediaStreamSource(mic);proc=rtc.createScriptProcessor(4096,1,1);
+    let rtAcc=new Float32Array(0);
     const pr=location.protocol==='https:'?'wss':'ws';
     ws=new WebSocket(`${pr}://${location.host}/ws/realtime`);ws.binaryType='arraybuffer';
     ws.onmessage=e=>{
@@ -701,10 +717,15 @@ function initCall(){
       start=Date.now();setConn(true,'live');setSt('','idle');sendCtx();
       proc.onaudioprocess=e=>{
         if(ws.readyState!==1)return;
-        const f=e.inputBuffer.getChannelData(0),i16=new Int16Array(f.length);
-        for(let i=0;i<f.length;i++)i16[i]=Math.max(-32768,Math.min(32767,f[i]*32768));
-        ws.send(i16.buffer);
-        if(spk)userBuf.push(new Int16Array(i16));
+        const rs=resamplePcm(e.inputBuffer.getChannelData(0),e.inputBuffer.sampleRate,RT_SAMPLE_RATE);
+        const merged=new Float32Array(rtAcc.length+rs.length);merged.set(rtAcc);merged.set(rs,rtAcc.length);
+        let off=0;
+        for(;merged.length-off>=RT_BLOCK;off+=RT_BLOCK){
+          const i16=floatToI16(merged.subarray(off,off+RT_BLOCK));
+          ws.send(i16.buffer);
+          if(spk)userBuf.push(new Int16Array(i16));
+        }
+        rtAcc=merged.slice(off);
       };
       rtSrc.connect(proc);proc.connect(rtc.destination);
     };
