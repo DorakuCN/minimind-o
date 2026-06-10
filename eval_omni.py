@@ -37,7 +37,9 @@ def init_model(args):
     if model.audio_encoder is not None: model.audio_encoder.to(args.device)
     if model.vision_encoder is not None: model.vision_encoder.to(args.device)
     model.mimi_model = MimiModel.from_pretrained("./model/mimi").eval()
-    return model.half().eval().to(args.device), tokenizer
+    dtype_map = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}
+    eval_dtype = dtype_map[getattr(args, "dtype", "bf16")]
+    return model.to(dtype=eval_dtype).eval().to(args.device), tokenizer
 
 
 def eval_sample(model, tokenizer, args, idx, prompt, audio_inputs, output_name, pixel_values=None, history=None, audio_lens=None, ref_codes=None, spk_emb=None):
@@ -100,6 +102,7 @@ def main():
     parser.add_argument('--top_p', default=0.85, type=float, help="nucleus采样阈值")
     parser.add_argument('--output_dir', default='./output_audio/', type=str, help="输出音频保存目录")
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str, help="运行设备")
+    parser.add_argument('--dtype', default='bf16', choices=['fp16', 'bf16', 'fp32'], help="推理精度")
     parser.add_argument('--audio_dir', default='./dataset/eval_omni/', type=str, help="测试音频目录")
     parser.add_argument('--image_dir', default='./dataset/eval_omni/', type=str, help="测试图像目录")
     parser.add_argument('--open_thinking', default=0, type=int, help="是否开启思考模式（0=否，1=是）（思考模式下禁用audio输出）")

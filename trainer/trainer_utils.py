@@ -23,9 +23,14 @@ def Logger(content):
         print(content)
 
 
-def get_lr(current_step, total_steps, lr):
-    # 与 mmv 保持一致：初始 lr=1.0*base_lr，最终 lr=0.1*base_lr
-    return lr * (0.1 + 0.45 * (1 + math.cos(math.pi * current_step / total_steps)))
+def get_lr(current_step, total_steps, lr, warmup_steps=0):
+    # 与 mmv 保持一致：初始 lr=1.0*base_lr，最终 lr=0.1*base_lr；可选线性 warmup
+    if warmup_steps > 0 and current_step < warmup_steps:
+        return lr * (current_step / max(warmup_steps, 1))
+    if total_steps <= warmup_steps:
+        return lr * 0.1
+    progress = (current_step - warmup_steps) / max(total_steps - warmup_steps, 1)
+    return lr * (0.1 + 0.45 * (1 + math.cos(math.pi * progress)))
 
 
 def init_distributed_mode():
@@ -117,9 +122,9 @@ def omni_checkpoint(omni_config, weight='pretrain_omni', model=None, optimizer=N
         raw_model = getattr(raw_model, '_orig_mod', raw_model)
         # 移除冻结的 audio_encoder / vision_encoder 参数（不需要保存，从预训练路径重新加载）
         clean_state_dict = {k: v for k, v in raw_model.state_dict().items() if not k.startswith('audio_encoder.') and not k.startswith('vision_encoder.')}
-        state_dict = {k: v.half().cpu() for k, v in clean_state_dict.items()}
+        state_dict_half = {k: v.half().cpu() for k, v in clean_state_dict.items()}
         ckp_tmp = ckp_path + '.tmp'
-        torch.save(state_dict, ckp_tmp)
+        torch.save(state_dict_half, ckp_tmp)
         os.replace(ckp_tmp, ckp_path)
         
         wandb_id = None
@@ -130,8 +135,9 @@ def omni_checkpoint(omni_config, weight='pretrain_omni', model=None, optimizer=N
             else:
                 wandb_id = getattr(wandb, 'id', None)
         
+        resume_state_dict = {k: v.detach().cpu() for k, v in clean_state_dict.items()}
         resume_data = {
-            'model': state_dict,
+            'model': resume_state_dict,
             'optimizer': optimizer.state_dict(),
             'epoch': epoch,
             'step': step,
