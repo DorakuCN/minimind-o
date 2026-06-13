@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export WEIGHT_PREFIX="${WEIGHT_PREFIX:-sft_full_muon_v3}"
 export RUN_GROUP="${RUN_GROUP:-muon_v3}"
 export WANDB_PROJECT="${WANDB_PROJECT:-MiniMind-O-Full-Train}"
+export DDP_BROADCAST_BUFFERS="${DDP_BROADCAST_BUFFERS:-0}"
 
 # v2 schedule
 export EPOCHS_I2T_PROJ="${EPOCHS_I2T_PROJ:-2}"

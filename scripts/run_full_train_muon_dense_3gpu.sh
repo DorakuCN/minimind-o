@@ -23,13 +23,16 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 MASTER_PORT="${MASTER_PORT:-29560}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-3}"
 NUM_WORKERS="${NUM_WORKERS:-8}"
+ACCUMULATION_STEPS="${ACCUMULATION_STEPS:-1}"
 LOG_INTERVAL="${LOG_INTERVAL:-100}"
 SAVE_INTERVAL="${SAVE_INTERVAL:-1000}"
 GPU_LOG_INTERVAL="${GPU_LOG_INTERVAL:-30}"
+MAX_TRAIN_STEPS="${MAX_TRAIN_STEPS:-0}"
 RANK_SHARDED_DATA="${RANK_SHARDED_DATA:-1}"
 START_STAGE="${START_STAGE:-1}"
 END_STAGE="${END_STAGE:-7}"
 DRY_RUN="${DRY_RUN:-0}"
+USE_MOE="${USE_MOE:-0}"
 
 USE_WANDB="${USE_WANDB:-0}"
 WANDB_PROJECT="${WANDB_PROJECT:-MiniMind-O-SFT}"
@@ -42,6 +45,37 @@ BATCH_A2A_PROJ="${BATCH_A2A_PROJ:-32}"
 BATCH_A2A_FULL="${BATCH_A2A_FULL:-24}"
 BATCH_I2T_PROJ="${BATCH_I2T_PROJ:-64}"
 BATCH_I2T_FULL="${BATCH_I2T_FULL:-64}"
+
+HIDDEN_SIZE="${HIDDEN_SIZE:-768}"
+NUM_HIDDEN_LAYERS="${NUM_HIDDEN_LAYERS:-8}"
+NUM_ATTENTION_HEADS="${NUM_ATTENTION_HEADS:-}"
+NUM_KEY_VALUE_HEADS="${NUM_KEY_VALUE_HEADS:-}"
+HEAD_DIM="${HEAD_DIM:-}"
+INTERMEDIATE_SIZE="${INTERMEDIATE_SIZE:-}"
+NUM_TALKER_HIDDEN_LAYERS="${NUM_TALKER_HIDDEN_LAYERS:-}"
+TALKER_HIDDEN_SIZE="${TALKER_HIDDEN_SIZE:-}"
+TALKER_NUM_ATTENTION_HEADS="${TALKER_NUM_ATTENTION_HEADS:-}"
+TALKER_NUM_KEY_VALUE_HEADS="${TALKER_NUM_KEY_VALUE_HEADS:-}"
+TALKER_HEAD_DIM="${TALKER_HEAD_DIM:-}"
+TALKER_INTERMEDIATE_SIZE="${TALKER_INTERMEDIATE_SIZE:-}"
+BRIDGE_LAYER="${BRIDGE_LAYER:-}"
+GRADIENT_CHECKPOINTING="${GRADIENT_CHECKPOINTING:-0}"
+
+SEQ_T2A="${SEQ_T2A:-512}"
+SEQ_A2A="${SEQ_A2A:-1024}"
+SEQ_I2T="${SEQ_I2T:-768}"
+
+DATA_T2A="${DATA_T2A:-../dataset/sft_t2a.parquet}"
+DATA_A2A="${DATA_A2A:-../dataset/sft_a2a.parquet}"
+DATA_I2T="${DATA_I2T:-../dataset/sft_i2t.parquet}"
+
+COMPILE_T2A="${COMPILE_T2A:-1}"
+COMPILE_A2A_PROJ="${COMPILE_A2A_PROJ:-0}"
+COMPILE_A2A_FULL="${COMPILE_A2A_FULL:-0}"
+COMPILE_I2T_PROJ="${COMPILE_I2T_PROJ:-1}"
+COMPILE_I2T_ALL="${COMPILE_I2T_ALL:-1}"
+COMPILE_A2A_FINAL="${COMPILE_A2A_FINAL:-0}"
+COMPILE_I2T_FINAL="${COMPILE_I2T_FINAL:-1}"
 
 # Stage hyperparameters (defaults match baseline full train)
 EPOCHS_T2A="${EPOCHS_T2A:-6}"
@@ -76,11 +110,38 @@ VAL_INTERVAL="${VAL_INTERVAL:-0}"
 VAL_DATA_T2A="${VAL_DATA_T2A:-}"
 VAL_DATA_A2A="${VAL_DATA_A2A:-}"
 VAL_DATA_I2T="${VAL_DATA_I2T:-}"
+FINITE_GUARD="${FINITE_GUARD:-1}"
+FINITE_GUARD_LOGITS_INTERVAL="${FINITE_GUARD_LOGITS_INTERVAL:-0}"
+DDP_BROADCAST_BUFFERS="${DDP_BROADCAST_BUFFERS:-1}"
 
 phase0_args=()
 if [[ "${WARMUP_RATIO}" != "0" && -n "${WARMUP_RATIO}" ]]; then
   phase0_args+=(--warmup_ratio "${WARMUP_RATIO}")
 fi
+
+model_args=(
+  --hidden_size "${HIDDEN_SIZE}"
+  --num_hidden_layers "${NUM_HIDDEN_LAYERS}"
+  --gradient_checkpointing "${GRADIENT_CHECKPOINTING}"
+)
+append_optional_model_arg() {
+  local value="$1"
+  local flag="$2"
+  if [[ -n "${value}" ]]; then
+    model_args+=("${flag}" "${value}")
+  fi
+}
+append_optional_model_arg "${NUM_ATTENTION_HEADS}" --num_attention_heads
+append_optional_model_arg "${NUM_KEY_VALUE_HEADS}" --num_key_value_heads
+append_optional_model_arg "${HEAD_DIM}" --head_dim
+append_optional_model_arg "${INTERMEDIATE_SIZE}" --intermediate_size
+append_optional_model_arg "${NUM_TALKER_HIDDEN_LAYERS}" --num_talker_hidden_layers
+append_optional_model_arg "${TALKER_HIDDEN_SIZE}" --talker_hidden_size
+append_optional_model_arg "${TALKER_NUM_ATTENTION_HEADS}" --talker_num_attention_heads
+append_optional_model_arg "${TALKER_NUM_KEY_VALUE_HEADS}" --talker_num_key_value_heads
+append_optional_model_arg "${TALKER_HEAD_DIM}" --talker_head_dim
+append_optional_model_arg "${TALKER_INTERMEDIATE_SIZE}" --talker_intermediate_size
+append_optional_model_arg "${BRIDGE_LAYER}" --bridge_layer
 if [[ "${LOSS_NORM}" == "global" ]]; then
   phase0_args+=(--loss_norm global)
 fi
@@ -152,11 +213,17 @@ run_stage_numbered() {
 
 common_args=(
   --optimizer muon
+  --accumulation_steps "${ACCUMULATION_STEPS}"
+  --max_train_steps "${MAX_TRAIN_STEPS}"
   --num_workers "${NUM_WORKERS}"
   --log_interval "${LOG_INTERVAL}"
   --save_interval "${SAVE_INTERVAL}"
   --rank_sharded_data "${RANK_SHARDED_DATA}"
-  --use_moe 0
+  --ddp_broadcast_buffers "${DDP_BROADCAST_BUFFERS}"
+  --finite_guard "${FINITE_GUARD}"
+  --finite_guard_logits_interval "${FINITE_GUARD_LOGITS_INTERVAL}"
+  --use_moe "${USE_MOE}"
+  "${model_args[@]}"
 )
 
 launch=(
@@ -175,8 +242,16 @@ echo "RANK_SHARDED_DATA=${RANK_SHARDED_DATA}"
 echo "START_STAGE=${START_STAGE}, END_STAGE=${END_STAGE}"
 echo "DRY_RUN=${DRY_RUN}"
 echo "PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF}"
+echo "USE_MOE=${USE_MOE}"
 echo "Batches: T2A=${BATCH_T2A}, A2A_PROJ=${BATCH_A2A_PROJ}, A2A_FULL=${BATCH_A2A_FULL}, I2T_PROJ=${BATCH_I2T_PROJ}, I2T_FULL=${BATCH_I2T_FULL}"
+echo "Accumulation: ${ACCUMULATION_STEPS}"
+echo "Max train steps per trainer call: ${MAX_TRAIN_STEPS}"
+echo "Arch: hidden=${HIDDEN_SIZE}, layers=${NUM_HIDDEN_LAYERS}, heads=${NUM_ATTENTION_HEADS:-default}, kv=${NUM_KEY_VALUE_HEADS:-default}, ffn=${INTERMEDIATE_SIZE:-default}, talker_hidden=${TALKER_HIDDEN_SIZE:-default}, checkpointing=${GRADIENT_CHECKPOINTING}"
+echo "Seq lens: T2A=${SEQ_T2A}, A2A=${SEQ_A2A}, I2T=${SEQ_I2T}"
+echo "Compile: T2A=${COMPILE_T2A}, A2A_PROJ=${COMPILE_A2A_PROJ}, A2A_FULL=${COMPILE_A2A_FULL}, I2T_PROJ=${COMPILE_I2T_PROJ}, I2T_ALL=${COMPILE_I2T_ALL}, A2A_FINAL=${COMPILE_A2A_FINAL}, I2T_FINAL=${COMPILE_I2T_FINAL}"
 echo "Phase0: WARMUP_RATIO=${WARMUP_RATIO}, LOSS_NORM=${LOSS_NORM}, VAL_INTERVAL=${VAL_INTERVAL}"
+echo "Finite guard: FINITE_GUARD=${FINITE_GUARD}, FINITE_GUARD_LOGITS_INTERVAL=${FINITE_GUARD_LOGITS_INTERVAL}"
+echo "DDP: DDP_BROADCAST_BUFFERS=${DDP_BROADCAST_BUFFERS}"
 
 stage1_val=()
 stage_val_args "${VAL_DATA_T2A}" stage1_val
@@ -187,14 +262,14 @@ run_stage_numbered 1 "01_t2a_all" \
   "${stage1_val[@]}" \
   --learning_rate "${LR_T2A}" \
   --muon_lr "${MUON_LR_T2A}" \
-  --data_path ../dataset/sft_t2a.parquet \
+  --data_path "${DATA_T2A}" \
   --epochs "${EPOCHS_T2A}" \
   --batch_size "${BATCH_T2A}" \
-  --use_compile 1 \
+  --use_compile "${COMPILE_T2A}" \
   --from_weight "${STAGE1_FROM_WEIGHT}" \
   --from_resume "${RESUME_STAGE1:-0}" \
   --save_weight "${WEIGHT_PREFIX}_t2a" \
-  --max_seq_len 512 \
+  --max_seq_len "${SEQ_T2A}" \
   --wandb_run_name "${RUN_GROUP}_01_t2a_all" \
   --metrics_path "${LOG_DIR}/01_t2a_all.metrics.json" \
   "${wandb_args[@]}"
@@ -208,14 +283,14 @@ run_stage_numbered 2 "02_a2a_audio_proj" \
   "${stage2_val[@]}" \
   --learning_rate "${LR_A2A_PROJ}" \
   --muon_lr "${MUON_LR_A2A_PROJ}" \
-  --data_path ../dataset/sft_a2a.parquet \
+  --data_path "${DATA_A2A}" \
   --epochs "${EPOCHS_A2A_PROJ}" \
   --batch_size "${BATCH_A2A_PROJ}" \
-  --use_compile 0 \
+  --use_compile "${COMPILE_A2A_PROJ}" \
   --from_weight "${WEIGHT_PREFIX}_t2a" \
   --from_resume "${RESUME_STAGE2:-0}" \
   --save_weight "${WEIGHT_PREFIX}_a2a_proj" \
-  --max_seq_len 1024 \
+  --max_seq_len "${SEQ_A2A}" \
   --mode audio_proj \
   --wandb_run_name "${RUN_GROUP}_02_a2a_audio_proj" \
   --metrics_path "${LOG_DIR}/02_a2a_audio_proj.metrics.json" \
@@ -230,14 +305,14 @@ run_stage_numbered 3 "03_a2a_all" \
   "${stage3_val[@]}" \
   --learning_rate "${LR_A2A_FULL}" \
   --muon_lr "${MUON_LR_A2A_FULL}" \
-  --data_path ../dataset/sft_a2a.parquet \
+  --data_path "${DATA_A2A}" \
   --epochs "${EPOCHS_A2A_FULL}" \
   --batch_size "${BATCH_A2A_FULL}" \
-  --use_compile 0 \
+  --use_compile "${COMPILE_A2A_FULL}" \
   --from_weight "${WEIGHT_PREFIX}_a2a_proj" \
   --from_resume "${RESUME_STAGE3:-0}" \
   --save_weight "${WEIGHT_PREFIX}_a2a_full" \
-  --max_seq_len 1024 \
+  --max_seq_len "${SEQ_A2A}" \
   --wandb_run_name "${RUN_GROUP}_03_a2a_all" \
   --metrics_path "${LOG_DIR}/03_a2a_all.metrics.json" \
   "${wandb_args[@]}"
@@ -251,14 +326,14 @@ run_stage_numbered 4 "04_i2t_vision_proj" \
   "${stage4_val[@]}" \
   --learning_rate "${LR_I2T_PROJ}" \
   --muon_lr "${MUON_LR_I2T_PROJ}" \
-  --data_path ../dataset/sft_i2t.parquet \
+  --data_path "${DATA_I2T}" \
   --epochs "${EPOCHS_I2T_PROJ}" \
   --batch_size "${BATCH_I2T_PROJ}" \
-  --use_compile 1 \
+  --use_compile "${COMPILE_I2T_PROJ}" \
   --from_weight "${WEIGHT_PREFIX}_a2a_full" \
   --from_resume "${RESUME_STAGE4:-0}" \
   --save_weight "${WEIGHT_PREFIX}_i2t_proj" \
-  --max_seq_len 768 \
+  --max_seq_len "${SEQ_I2T}" \
   --mode vision_proj \
   --wandb_run_name "${RUN_GROUP}_04_i2t_vision_proj" \
   --metrics_path "${LOG_DIR}/04_i2t_vision_proj.metrics.json" \
@@ -273,14 +348,14 @@ run_stage_numbered 5 "05_i2t_all" \
   "${stage5_val[@]}" \
   --learning_rate "${LR_I2T_ALL}" \
   --muon_lr "${MUON_LR_I2T_ALL}" \
-  --data_path ../dataset/sft_i2t.parquet \
+  --data_path "${DATA_I2T}" \
   --epochs "${EPOCHS_I2T_ALL}" \
   --batch_size "${BATCH_I2T_FULL}" \
-  --use_compile 1 \
+  --use_compile "${COMPILE_I2T_ALL}" \
   --from_weight "${WEIGHT_PREFIX}_i2t_proj" \
   --from_resume "${RESUME_STAGE5:-0}" \
   --save_weight "${WEIGHT_PREFIX}_i2t_full" \
-  --max_seq_len 768 \
+  --max_seq_len "${SEQ_I2T}" \
   --wandb_run_name "${RUN_GROUP}_05_i2t_all" \
   --metrics_path "${LOG_DIR}/05_i2t_all.metrics.json" \
   "${wandb_args[@]}"
@@ -294,14 +369,14 @@ run_stage_numbered 6 "06_a2a_final_all" \
   "${stage6_val[@]}" \
   --learning_rate "${LR_A2A_FINAL}" \
   --muon_lr "${MUON_LR_A2A_FINAL}" \
-  --data_path ../dataset/sft_a2a.parquet \
+  --data_path "${DATA_A2A}" \
   --epochs "${EPOCHS_A2A_FINAL}" \
   --batch_size "${BATCH_A2A_FULL}" \
-  --use_compile 0 \
+  --use_compile "${COMPILE_A2A_FINAL}" \
   --from_weight "${WEIGHT_PREFIX}_i2t_full" \
   --from_resume "${RESUME_STAGE6:-0}" \
   --save_weight "${WEIGHT_PREFIX}_a2a_final" \
-  --max_seq_len 1024 \
+  --max_seq_len "${SEQ_A2A}" \
   --wandb_run_name "${RUN_GROUP}_06_a2a_final_all" \
   --metrics_path "${LOG_DIR}/06_a2a_final_all.metrics.json" \
   "${wandb_args[@]}"
@@ -315,14 +390,14 @@ run_stage_numbered 7 "07_i2t_final_vision_proj" \
   "${stage7_val[@]}" \
   --learning_rate "${LR_I2T_FINAL}" \
   --muon_lr "${MUON_LR_I2T_FINAL}" \
-  --data_path ../dataset/sft_i2t.parquet \
+  --data_path "${DATA_I2T}" \
   --epochs "${EPOCHS_I2T_FINAL}" \
   --batch_size "${BATCH_I2T_PROJ}" \
-  --use_compile 1 \
+  --use_compile "${COMPILE_I2T_FINAL}" \
   --from_weight "${WEIGHT_PREFIX}_a2a_final" \
   --from_resume "${RESUME_STAGE7:-0}" \
   --save_weight "${WEIGHT_PREFIX}_final" \
-  --max_seq_len 768 \
+  --max_seq_len "${SEQ_I2T}" \
   --mode vision_proj \
   --wandb_run_name "${RUN_GROUP}_07_i2t_final_vision_proj" \
   --metrics_path "${LOG_DIR}/07_i2t_final_vision_proj.metrics.json" \

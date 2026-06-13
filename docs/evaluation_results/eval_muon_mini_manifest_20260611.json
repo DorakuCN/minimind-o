@@ -1,0 +1,235 @@
+{
+  "generated_at": "2026-06-10 16:12:53",
+  "root": "/home/genesis/Projects/minimind-o",
+  "test_set": {
+    "path": "dataset/eval_muon_mini.jsonl",
+    "bytes": 2647,
+    "sha256": "7ff2200345dc4f6cd4978a0b41844be52ff05bfb3ce34211331ce95e3b795b11"
+  },
+  "case_count": 13,
+  "cases": [
+    {
+      "id": "t2a_en_intro",
+      "type": "text",
+      "prompt": "Please introduce yourself in one short sentence.",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 1
+    },
+    {
+      "id": "t2a_en_joke",
+      "type": "text",
+      "prompt": "Tell me a short joke.",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 2
+    },
+    {
+      "id": "t2a_en_space",
+      "type": "text",
+      "prompt": "Tell me one interesting fact about space.",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 3
+    },
+    {
+      "id": "t2a_en_coffee",
+      "type": "text",
+      "prompt": "How do I make a good cup of coffee?",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 4
+    },
+    {
+      "id": "t2a_en_health",
+      "type": "text",
+      "prompt": "How can I maintain a healthy lifestyle?",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 5
+    },
+    {
+      "id": "t2a_zh_intro_probe",
+      "type": "text",
+      "prompt": "请用一句话介绍你自己。",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 6
+    },
+    {
+      "id": "t2a_zh_spring_probe",
+      "type": "text",
+      "prompt": "请用一句话介绍一下春天。",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 7
+    },
+    {
+      "id": "a2a_en_food",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-01_what_do_you_usually_like_to_eat.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 8
+    },
+    {
+      "id": "a2a_en_sky_blue",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-05_why_is_the_sky_blue.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 9
+    },
+    {
+      "id": "a2a_en_coffee",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-12_how_do_i_make_a_good_cup_of_coffee.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 10
+    },
+    {
+      "id": "a2a_zh_sky_blue_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-05_为什么天空是蓝色的.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "out_of_domain_probe"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 11
+    },
+    {
+      "id": "i2a_cat_untrained_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-01-orange-cat-moon-desk.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 12
+    },
+    {
+      "id": "i2a_fruit_untrained_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-02-fruit-basket-apples-bananas-oranges.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 13
+    }
+  ],
+  "files": [
+    {
+      "path": "dataset/eval_omni/audio-en-01_what_do_you_usually_like_to_eat.mp3",
+      "exists": true,
+      "bytes": 5924,
+      "sha256": "963e9b3a3832360c8f828435914c1ebb368aa1061ea2f86cafd11a93aab33a6a"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-05_why_is_the_sky_blue.mp3",
+      "exists": true,
+      "bytes": 5420,
+      "sha256": "b2ac22cdfaf81bd65dd6c7055c139d3ae519cf176c7ca2f2d89dd90899d2787f"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-12_how_do_i_make_a_good_cup_of_coffee.mp3",
+      "exists": true,
+      "bytes": 5924,
+      "sha256": "1b58b3276281352d4d258ec91bda35d8de224bf61a79124e270f2ca37087cde4"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-05_为什么天空是蓝色的.mp3",
+      "exists": true,
+      "bytes": 4268,
+      "sha256": "6bc9b6ad95892b9fc1040d905eb2e3c0cf79397a4da7d06c314fa1c33a61b1e7"
+    },
+    {
+      "path": "dataset/eval_omni/image-01-orange-cat-moon-desk.jpg",
+      "exists": true,
+      "bytes": 17712,
+      "sha256": "fd2898ecc7a73cbf16d9c6f3ded1c59f176e6e8868a4c7699f814d6aba18f19a"
+    },
+    {
+      "path": "dataset/eval_omni/image-02-fruit-basket-apples-bananas-oranges.jpg",
+      "exists": true,
+      "bytes": 14376,
+      "sha256": "b9d11538c3c404aaee7104b0ac8c6de73d14f834e52ad7efe0c34d61928d1359"
+    }
+  ],
+  "missing_files": []
+}

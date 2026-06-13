@@ -25,10 +25,18 @@ Related plans:
 | Run | Weight prefix | Main change | Launcher | Status |
 | --- | --- | --- | --- | --- |
 | A | `sft_full_muon` | 7-stage Muon dense baseline | `run_full_train_muon_dense_3gpu.sh` | **Completed** |
-| B | `sft_full_muon_v2` | v2 schedule only (S4/S5 +2ep, S6 lower LR) | `run_full_train_muon_v2_3gpu.sh` | Code ready, not trained |
-| C | `sft_full_muon_v3` | v2 schedule + Phase-0 fixes | `run_full_train_muon_v3_3gpu.sh` | Code ready, not trained |
+| B3_himem_b88 | `sft_full_muon_v2_himem_b88` | v2 schedule plus Stage1 batch 88 | `run_full_train_muon_v2_3gpu.sh` + env override | **Completed; not promoted after L1** |
+| C | `sft_full_muon_v3` | v2 wrapper + Phase-0 fixes | `run_full_train_muon_v3_3gpu.sh` | **Completed 2026-06-12; text/image candidate, audio unresolved pending listening** |
 
-Run C must be compared against the **winner of Run B**, not Run A directly, because loss normalization and warmup change the loss scale.
+After the L1 review, baseline A remains the primary comparison anchor. Run C should still report B3 as secondary context, but raw training loss must not be compared directly against A because loss normalization, RVQ weights, and warmup change the loss scale.
+
+Run C completed successfully on 2026-06-12 with `DDP_BROADCAST_BUFFERS=0` after the earlier NCCL buffer-broadcast timeout. Final artifacts:
+
+- Model: `out/sft_full_muon_v3_final_768.pth`
+- Logs: `.run_logs/full_train_sft_full_muon_v3_RunC_after_L1_3gpu_20260612_032548_RunC_v3_after_L1_ddpbuf0_tmux/`
+- L1 eval: `eval_results/sft_full_muon_v3_final_l1_bf16_t160/`
+- Three-way report: `docs/evaluation_results/compare_muon_v3_l1_t160_vs_baseline_and_b3_20260612.md`
+- AI-assisted review: `docs/evaluation_results/review_muon_v3_l1_t160_vs_baseline_l1_t160.md` (A 17 / C 25 / Tie 15 overall; audio-specific verdict unresolved because CER, semantics, and repeat behavior conflict)
 
 ---
 
@@ -243,7 +251,7 @@ out/sft_full_muon_v3_final_768.pth
   *.metrics.json  (includes warmup_ratio, loss_norm, rvq weights, val_metrics)
 dataset/_val/sft_{t2a,a2a,i2t}_val.parquet
 eval_results/sft_full_muon_v3_final_batch_audio_bf16/
-docs/evaluation_results/compare_muon_v3_vs_v2.md  (create after both B and C finish)
+docs/evaluation_results/compare_muon_v3_vs_baseline_l1_t160.md
 ```
 
 ### Per-stage metrics JSON fields (all runs using updated trainer)
@@ -273,32 +281,34 @@ This review uses the pipeline map at `/home/genesis/.cursor/projects/home-genesi
 | A is frozen as the completed baseline | It gives a real full-train reference with logs, metrics, checkpoints, and eval artifacts. | A was trained before Phase-0 fixes, so future loss numbers are not always apples-to-apples. |
 | B changes schedule only | A vs B remains the cleanest quality comparison because loss math, optimizer, data, batch, and model are held constant. | B still bundles two hypotheses: more I2T training and gentler S6 A2A final. |
 | C is separated from B | Warmup, global loss norm, RVQ weights, and fp32 resume are correctness changes; separating them prevents silent attribution errors. | C loss scale differs; C must be compared against B's winner mostly through eval and curve shape, not raw final loss alone. |
-| D throughput is postponed | Packing/streaming/offline encoders can change data order and effective token mix; isolating throughput work avoids confusing quality conclusions. | D needs its own invariance tests before any quality claim. |
+| T throughput is postponed | Packing/streaming/offline encoders can change data order and effective token mix; isolating throughput work avoids confusing quality conclusions. | T needs its own invariance tests before any quality claim. |
 | bf16 is now the default eval dtype | It directly addresses the fp16 non-finite-probability failure seen in Run A eval. | fp16 should remain a tracked failure mode, not silently ignored. |
 
-The overall A/B/C/D split is therefore directionally sound. The biggest improvement is not to replace it, but to tighten the measurement gates and optionally split Run B if the first B result is ambiguous.
+The original A/B/C/T split is therefore directionally sound for attribution. After Run C, the quality line now adds **Run D audio recovery** (`docs/training_plans/next_model_training_runD_20260613.md`) before any throughput work.
 
 ### Attribution risks in the current B/C matrix
 
 | Risk | Why it matters | Recommendation |
 | --- | --- | --- |
 | Run B bundles I2T schedule and A2A LR changes | If I2A improves but A2A regresses, or vice versa, it is unclear which change did the work. | Keep B as the practical candidate run. If B is mixed, add B1 = only S4/S5 2 epochs and B2 = only S6 lower LR before moving to C. |
-| Run C changes loss scale | `loss_norm=global` and RVQ weights alter numeric loss magnitude and gradient allocation. | Do not compare C raw loss directly with A. Compare C to B winner using val curve shape, final eval, audio CE components, and manual review. |
+| Run C changes loss scale | `loss_norm=global` and RVQ weights alter numeric loss magnitude and gradient allocation. | Do not compare C raw loss directly with A. Compare C against A on L1 eval/ASR/manual review and use val curve shape, audio CE components, and per-RVQ metrics for training health. |
 | Val split may overlap training shards | Current `_val` is for curve monitoring, not held-out generalization. | Add a later `dataset/_heldout/` built from source rows before shard creation or by stable row hash exclusion. Keep `_val` labeled "monitoring only". |
 | `eval_muon_mini.jsonl` has only 13 cases | It is enough for smoke regression, but too small to prove quality movement. | Promote it to L0 smoke. Add L1 objective set with at least 50 T2A, 30 A2A, 50 I2A cases before making strong claims. |
 | Basic pass is too weak | Text length + audio frames can pass while semantics are wrong. | Add ASR round-trip, image grounding rubric, audio duration/silence checks, and human blind win/tie/loss. |
 | Sampling noise can mask small gains | `temperature=0.7`, `top_p=0.85` introduces stochastic variance. | For each candidate run: fixed-seed sample for continuity, plus either greedy/low-temp deterministic pass or 3-seed aggregate for final comparison. |
 | 96-token cap truncates some outputs | A/B differences may reflect truncation behavior rather than knowledge or grounding. | Keep 96-token run for historical parity, but always run a secondary `max_new_tokens=160` qualitative set for T2A/A2A/I2A. |
-| Audio quality is not scored | MP3 decode success and frame count do not measure intelligibility, naturalness, or speaker stability. | Add faster-whisper transcription CER/WER, silence/clipping checks, optional UTMOS, and a small manual listening panel. |
+| Audio quality is not scored | MP3 decode success and frame count do not measure intelligibility, naturalness, or speaker stability. | Add SenseVoiceSmall ASR round-trip CER/WER, silence/clipping checks, optional UTMOS, and a small manual listening panel. |
 | I2A grounding is under-measured | The two image probes reveal hallucination, but not enough categories. | Add golden image prompts for object identity, count, color, spatial relation, OCR, and "do not hallucinate" negative cases. |
 
 ### Recommended run decomposition
 
-The recommended default remains:
+The original recommended default was:
 
 ```text
-A baseline completed -> B v2 schedule -> C v3 Phase-0 fixes -> D throughput
+A baseline completed -> B v2 schedule -> C v3 Phase-0 fixes -> T throughput
 ```
+
+2026-06-13 update: after Run C, text/image improved but audio CER and repeat regressed monotonically across A -> B3 -> C. The next quality run is therefore **Run D audio recovery**, while throughput remains **Run T**.
 
 Use the following decision tree after Run B:
 
@@ -346,7 +356,7 @@ I2A: 50 image prompts
 For generated audio, add:
 
 ```text
-faster-whisper ASR -> transcript
+SenseVoiceSmall ASR -> transcript
 CER/WER between generated transcript and generated text
 silence ratio / clipping ratio / duration
 optional UTMOS or human 1-5 MOS
@@ -397,13 +407,12 @@ Run B should be promoted only if all of these hold:
 
 Run C should be promoted only if:
 
-- B winner is already selected.
-- C eval is no worse than B on L0 and L1.
-- Val curves are smoother or at least not spikier than B.
+- C eval is no worse than baseline A on L0 and L1.
+- Val curves are smooth enough for monitoring and do not show unexplained spikes.
 - fp32 resume has been verified after a real checkpoint, not only smoke.
 - Per-RVQ-layer metrics show the weighting is doing something interpretable.
 
-Run D should be accepted only if:
+Run T should be accepted only if:
 
 - Same checkpoint-quality path is preserved within tolerance.
 - Throughput improves materially, e.g. `samples/sec` or token throughput +20% or better.
@@ -416,6 +425,200 @@ Run D should be accepted only if:
 3. Add a simple manual review template under `docs/evaluation_results/` with per-case win/tie/loss and notes.
 4. Keep `bf16` as primary eval dtype; run `fp32` only as a diagnostic parity check.
 5. Record the independent Cursor `git add` process separately if it remains active, because it can distort CPU/disk observations even though it does not affect GPU training.
+
+---
+
+## Implementation Update After Plan Review
+
+Reviewer feedback accepted the analysis and highlighted the minimum action sequence:
+
+```text
+freeze eval manifest -> run A 160-token baseline -> launch B3 -> split B1/B2 only if mixed -> add ASR/per-layer CE before C
+```
+
+This section records the concrete changes and validation run after that review.
+
+### Plan updates
+
+`docs/training_plans/next_model_comparison_muon_v2_20260611.md` now includes:
+
+- pre-run eval manifest command;
+- A baseline 160-token eval command;
+- B3 default run definition;
+- B1 and B2 no-code-change launch commands using existing environment variables;
+- manual review template command;
+- optional ASR round-trip command.
+
+B split launch mapping:
+
+| Run | Purpose | How to launch |
+| --- | --- | --- |
+| B1 | isolate I2T schedule | `EPOCHS_I2T_PROJ=2 EPOCHS_I2T_ALL=2 bash scripts/run_full_train_muon_dense_3gpu.sh` |
+| B2 | isolate A2A final LR | `LR_A2A_FINAL=2e-6 MUON_LR_A2A_FINAL=0.0005 bash scripts/run_full_train_muon_dense_3gpu.sh` |
+| B3 | combined v2 candidate | `bash scripts/run_full_train_muon_v2_3gpu.sh` |
+
+### New scripts
+
+| File | Purpose | Validation |
+| --- | --- | --- |
+| `scripts/snapshot_eval_manifest.py` | Hash eval jsonl and referenced media files. | Ran on `dataset/eval_muon_mini.jsonl`; missing files = 0. |
+| `scripts/make_manual_review_template.py` | Create a manual A/B review markdown table. | Generated `review_baseline_96_vs_160_template.md`. |
+| `scripts/asr_eval_generated_audio.py` | Optional SenseVoiceSmall ASR round-trip with CER/WER; legacy faster-whisper backend retained for old reports. | Defaults changed to SenseVoice CPU batch (`--device cpu --batch_size 16`) because L0/L1 underutilize GPU. |
+
+Generated artifacts:
+
+```text
+docs/evaluation_results/eval_muon_mini_manifest_20260611.json
+docs/evaluation_results/eval_muon_mini_manifest_20260611.md
+docs/evaluation_results/review_baseline_96_vs_160_template.md
+eval_results/sft_full_muon_final_batch_audio_bf16_t160/
+.run_logs/eval/sft_full_muon_final_batch_audio_bf16_t160.log
+```
+
+Eval manifest summary:
+
+```text
+test_set_sha256 = 7ff2200345dc4f6cd4978a0b41844be52ff05bfb3ce34211331ce95e3b795b11
+cases = 13
+referenced_files = 6
+missing_files = 0
+```
+
+### A baseline 160-token eval
+
+Command:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python scripts/batch_validate_omni.py \
+  --weight sft_full_muon_final \
+  --output_dir eval_results/sft_full_muon_final_batch_audio_bf16_t160 \
+  --dtype bf16 --max_new_tokens 160 --decode_audio
+```
+
+Result:
+
+| Metric | Value |
+| --- | ---: |
+| basic pass | 13/13 |
+| dtype | bf16 |
+| max_new_tokens | 160 |
+| special_code_rate | 0.0000 for all cases |
+
+Observed note: longer generation exposes more quality issues even when structural pass is 13/13. Example: `t2a_en_space`, `t2a_en_coffee`, and both I2A cases remain semantically weak. This reinforces that B/C promotion should not rely on pass rate alone.
+
+### B dry-run validation
+
+All three B variants were dry-run validated after launcher parameterization:
+
+```text
+.run_logs/dryrun_muon_v2_b3_20260611.log
+.run_logs/dryrun_muon_b1_i2t_20260611.log
+.run_logs/dryrun_muon_b2_a2a_lr_20260611.log
+```
+
+Confirmed:
+
+- B3 uses S4/S5 epochs = 2 and S6 `learning_rate=2e-6`, `muon_lr=0.0005`.
+- B1 uses S4/S5 epochs = 2 and keeps S6 baseline LR.
+- B2 keeps S4/S5 baseline epochs and uses S6 lower LR.
+- All variants pass `FINITE_GUARD=1` through the launcher.
+
+### Trainer changes and smoke validation
+
+Trainer changes:
+
+- per-RVQ-layer CE is recorded in `final_detail_metrics` and val metrics;
+- per-layer target counts, stop counts, and stop rates are recorded;
+- finite loss guard is enabled by default via `--finite_guard 1`;
+- optional full logits guard is controlled by `--finite_guard_logits_interval`;
+- launcher exposes `FINITE_GUARD` and `FINITE_GUARD_LOGITS_INTERVAL`.
+
+Static checks:
+
+| Check | Result |
+| --- | --- |
+| `python -m py_compile ...` | Pass |
+| `bash -n scripts/run_full_train_muon_{dense,v2,v3}_3gpu.sh` | Pass |
+| `scripts/test_loss_equivalence.py` | `text diff=0.00e+00, audio diff=0.00e+00` |
+
+Single-GPU smoke:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python train_sft_omni.py \
+  --data_path ../dataset/_val_mini/sft_t2a_mini_val.parquet \
+  --val_data_path ../dataset/_val_mini/sft_t2a_mini_val.parquet \
+  --warmup_ratio 0.02 --loss_norm global \
+  --rvq_layer_weights 2,1.5,1.2,1,0.8,0.7,0.6,0.5 \
+  --val_interval 4 --epochs 1 --batch_size 4 --from_weight llm \
+  --save_weight smoke_metrics_guard_20260611 \
+  --metrics_path ../.run_logs/smoke_metrics_guard_20260611.metrics.json \
+  --finite_guard 1 --finite_guard_logits_interval 1
+```
+
+Smoke result:
+
+| Metric | Value |
+| --- | ---: |
+| final_loss | 12.2474 |
+| final_text_loss | 4.5998 |
+| final_audio_loss | 7.6476 |
+| last_val_loss | 10.5905 |
+| last_val_text | 3.1263 |
+| last_val_audio | 7.4643 |
+| finite_guard | true |
+| finite_guard_logits_interval | 1 |
+
+Final RVQ layer losses from smoke:
+
+```text
+[7.642604, 7.436232, 7.686808, 7.69857, 7.717558, 7.712369, 7.749001, 7.781327]
+```
+
+Val RVQ layer losses from smoke:
+
+```text
+[7.364997, 7.211297, 7.479949, 7.530988, 7.583414, 7.616978, 7.644253, 7.677642]
+```
+
+This validates the trainer path needed before Run C. ASR round-trip is now available through SenseVoiceSmall CPU-batch inference.
+
+### Post-review notes
+
+Follow-up review confirmed the added plan and code paths are consistent with the current repository state. Two operational caveats were recorded:
+
+1. **ASR runtime should use SenseVoice CPU batch by default.** L0/L1 ASR batches are too small to occupy a GPU efficiently. `scripts/asr_eval_generated_audio.py` now defaults to SenseVoice and should be run as:
+
+```text
+--backend sensevoice --device cpu --batch_size 16
+```
+
+2. **Finite guard changes failure behavior, not numerics.** `FINITE_GUARD=1` is now the safe default, so NaN/Inf stops training early instead of allowing a bad run to continue. For strict old Run A behavior reproduction, set:
+
+```bash
+FINITE_GUARD=0
+```
+
+The formal monitoring splits were generated after fixing `make_val_split.py` to avoid pyarrow nested-list offset overflow during whole-table `take()`:
+
+```bash
+python scripts/make_val_split.py --dataset_dir dataset --output_dir dataset/_val
+```
+
+Result:
+
+```text
+sft_t2a.parquet: wrote 1000/1248923 rows -> dataset/_val/sft_t2a_val.parquet
+sft_a2a.parquet: wrote 1000/414024 rows -> dataset/_val/sft_a2a_val.parquet
+sft_i2t.parquet: wrote 1000/2904511 rows -> dataset/_val/sft_i2t_val.parquet
+```
+
+v3 dry-run after split generation confirmed all seven stages include the expected `--val_data_path` and Phase-0 flags:
+
+```text
+.run_logs/dryrun_muon_v3_after_val_20260611.log
+```
+
+These `_val` files are still for monitoring only, not held-out generalization.
 
 ---
 
@@ -471,12 +674,12 @@ python scripts/compare_eval_runs.py \
 - [ ] bf16 eval pass rate ≥ 13/13; repeat score not worse than A (0.0015 fp32 baseline)
 - [ ] `compare_muon_v2_vs_baseline.md` generated
 
-### Run C vs B winner
+### Run C vs baseline A
 
 - [ ] Val loss curves logged every 500 steps; no unexplained spikes
 - [ ] Resume checkpoint model dtype float32 (not half-truncated)
 - [ ] S6 A2A final loss stable vs S3
-- [ ] bf16 eval no regression vs B on pass rate; I2A blind review win/tie ≥ baseline
+- [ ] bf16 L1 eval no regression vs A on pass rate, ASR proxy, and manual review
 - [ ] Per-stage `*.metrics.json` archived under `.run_logs/`
 
 ---
@@ -486,7 +689,9 @@ python scripts/compare_eval_runs.py \
 1. **Val splits** (`dataset/_val/`) may overlap slightly with training shards; use for curve monitoring only, not held-out generalization claims.
 2. **fp16 inference** remains unsafe for current checkpoints; always evaluate with `--dtype bf16` or `fp32`.
 3. **Loss values across runs** are only directly comparable when `loss_norm` and `rvq_layer_weights` match; compare A vs B on eval metrics, B vs C on both loss trends and eval.
-4. **MoE aux mask**, packing, streaming data, and FSDP are planned separately (Run D) and not included in this version.
+4. **Finite guard** is fail-fast behavior. It does not change normal numeric results, but strict legacy replay can set `FINITE_GUARD=0`.
+5. **ASR eval** should default to SenseVoice CPU batch for L0/L1. Use GPU only for larger ASR batches where utilization is worthwhile.
+6. **MoE aux mask**, packing, streaming data, and FSDP are planned separately (Run T) and not included in this version. Run D is now reserved for audio-recovery quality training after Run C.
 
 ---
 
@@ -496,14 +701,17 @@ python scripts/compare_eval_runs.py \
 2026-06-11  model/model_omni.py              fp32 sampling in generate()
 2026-06-11  eval_omni.py                     --dtype bf16 default
 2026-06-11  scripts/batch_validate_omni.py   --dtype bf16 default
-2026-06-11  trainer/train_sft_omni.py        metrics, loss refactor, Phase-0 flags, val eval
+2026-06-11  trainer/train_sft_omni.py        metrics, loss refactor, Phase-0 flags, val eval, RVQ layer metrics, finite guard
 2026-06-11  trainer/trainer_utils.py           warmup LR, fp32 resume
 2026-06-11  scripts/run_full_train_muon_dense_3gpu.sh   parameterized + Phase-0 env
 2026-06-11  scripts/run_full_train_muon_v2_3gpu.sh      Run B wrapper
 2026-06-11  scripts/run_full_train_muon_v3_3gpu.sh      Run C wrapper
-2026-06-11  scripts/make_val_split.py          new
+2026-06-11  scripts/make_val_split.py          new; stream-batch sampling fix for nested-list parquet
 2026-06-11  scripts/compare_eval_runs.py       new
 2026-06-11  scripts/test_loss_equivalence.py   new
+2026-06-11  scripts/snapshot_eval_manifest.py  eval-set manifest/hash snapshot
+2026-06-11  scripts/make_manual_review_template.py  manual A/B review template
+2026-06-11  scripts/asr_eval_generated_audio.py     SenseVoice CPU-batch CER/WER; legacy whisper backend retained
 2026-06-11  docs/training_plans/next_model_comparison_muon_v2_20260611.md  Run C section
 2026-06-11  docs/training_summaries/training_pipeline_upgrade_20260611.md  this document
 ```

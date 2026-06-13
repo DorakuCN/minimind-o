@@ -118,6 +118,8 @@ def run_case(case, model, tokenizer, mimi, args):
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_p=args.top_p,
+        rp=args.repetition_penalty,
+        no_repeat_ngram_size=args.no_repeat_ngram_size,
         stream=True,
         return_audio_codes=True,
         audio_inputs=audio_inputs,
@@ -193,6 +195,8 @@ def write_summary(results, args, weight_path, load_result):
         "max_new_tokens": args.max_new_tokens,
         "temperature": args.temperature,
         "top_p": args.top_p,
+        "repetition_penalty": args.repetition_penalty,
+        "no_repeat_ngram_size": args.no_repeat_ngram_size,
     }
     with open(os.path.join(args.output_dir, "summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
@@ -204,7 +208,11 @@ def write_summary(results, args, weight_path, load_result):
         f.write(f"- Basic pass: {passed}/{total} ({summary['pass_rate']:.2%})\n")
         f.write(f"- Load missing/unexpected keys: {summary['missing_keys']}/{summary['unexpected_keys']}\n\n")
         f.write(f"- DType: `{args.dtype}`\n")
-        f.write(f"- Generation: max_new_tokens={args.max_new_tokens}, temperature={args.temperature}, top_p={args.top_p}\n\n")
+        f.write(
+            f"- Generation: max_new_tokens={args.max_new_tokens}, temperature={args.temperature}, "
+            f"top_p={args.top_p}, repetition_penalty={args.repetition_penalty}, "
+            f"no_repeat_ngram_size={args.no_repeat_ngram_size}\n\n"
+        )
         f.write("| id | type | pass | chars | frames | repeat | special | seconds | text |\n")
         f.write("|---|---|---:|---:|---:|---:|---:|---:|---|\n")
         for r in results:
@@ -234,6 +242,8 @@ def main():
     parser.add_argument("--max_new_tokens", type=int, default=96)
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--top_p", type=float, default=0.85)
+    parser.add_argument("--repetition_penalty", type=float, default=1.0)
+    parser.add_argument("--no_repeat_ngram_size", type=int, default=0)
     parser.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="bf16")
     parser.add_argument("--max_repeat_score", type=float, default=0.35)
     parser.add_argument("--decode_audio", action="store_true")

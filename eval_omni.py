@@ -50,7 +50,10 @@ def eval_sample(model, tokenizer, args, idx, prompt, audio_inputs, output_name, 
     audio_frames = []
     with torch.no_grad():
         res_y = model.generate(x, tokenizer.eos_token_id, max_new_tokens=args.max_new_tokens,
-                               temperature=args.temperature, top_p=args.top_p, stream=True,
+                               temperature=args.temperature, top_p=args.top_p,
+                               rp=args.repetition_penalty,
+                               no_repeat_ngram_size=args.no_repeat_ngram_size,
+                               stream=True,
                                return_audio_codes=True, open_thinking=bool(args.open_thinking),
                                audio_inputs=audio_inputs, audio_lens=audio_lens, pixel_values=pixel_values,
                                ref_codes=ref_codes, spk_emb=spk_emb)
@@ -100,6 +103,8 @@ def main():
     parser.add_argument('--max_new_tokens', default=512, type=int, help="最大生成长度")
     parser.add_argument('--temperature', default=0.7, type=float, help="Thinker生成温度")
     parser.add_argument('--top_p', default=0.85, type=float, help="nucleus采样阈值")
+    parser.add_argument('--repetition_penalty', default=1.0, type=float, help="重复惩罚系数，1.0表示关闭")
+    parser.add_argument('--no_repeat_ngram_size', default=0, type=int, help="禁止重复生成的文本token ngram大小，0表示关闭")
     parser.add_argument('--output_dir', default='./output_audio/', type=str, help="输出音频保存目录")
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str, help="运行设备")
     parser.add_argument('--dtype', default='bf16', choices=['fp16', 'bf16', 'fp32'], help="推理精度")
@@ -244,4 +249,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

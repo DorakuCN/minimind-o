@@ -84,7 +84,13 @@ def write_report(args, summary_a, summary_b, results_a, results_b):
         f.write(f"| Pass rate | {summary_a['pass_rate']:.2%} | {summary_b['pass_rate']:.2%} | "
                 f"{fmt_delta(summary_a['pass_rate'], summary_b['pass_rate'], higher_better=True)} |\n")
         f.write(f"| Dtype | {summary_a.get('dtype')} | {summary_b.get('dtype')} | |\n")
-        f.write(f"| max_new_tokens | {summary_a.get('max_new_tokens')} | {summary_b.get('max_new_tokens')} | |\n\n")
+        f.write(f"| max_new_tokens | {summary_a.get('max_new_tokens')} | {summary_b.get('max_new_tokens')} | |\n")
+        f.write(f"| temperature | {summary_a.get('temperature')} | {summary_b.get('temperature')} | |\n")
+        f.write(f"| top_p | {summary_a.get('top_p')} | {summary_b.get('top_p')} | |\n")
+        f.write(f"| repetition_penalty | {summary_a.get('repetition_penalty', 1.0)} | "
+                f"{summary_b.get('repetition_penalty', 1.0)} | |\n")
+        f.write(f"| no_repeat_ngram_size | {summary_a.get('no_repeat_ngram_size', 0)} | "
+                f"{summary_b.get('no_repeat_ngram_size', 0)} | |\n\n")
 
         f.write("## By Type\n\n")
         f.write("| Type | A pass | B pass | A avg chars | B avg chars | A avg frames | B avg frames | "

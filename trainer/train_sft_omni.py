@@ -36,7 +36,7 @@ def uses_legacy_audio_denominator(rvq_weights):
     return all(abs(w - 1.0) < 1e-9 for w in rvq_weights)
 
 
-def compute_batch_loss(res, labels, audio_labels, loss_fct, rvq_weights, audio_stop_weight, loss_norm):
+def compute_batch_loss(res, labels, audio_labels, loss_fct, rvq_weights, audio_stop_weight, loss_norm, return_details=False):
     world_size = dist.get_world_size() if dist.is_initialized() else 1
     use_global = loss_norm == 'global' and dist.is_initialized()
     stop_multiplier = max(audio_stop_weight - 1.0, 0.0)
@@ -56,6 +56,8 @@ def compute_batch_loss(res, labels, audio_labels, loss_fct, rvq_weights, audio_s
     audio_loss = res.audio_logits[0].sum() * 0
     layer_means = []
     active_weights = []
+    layer_counts = []
+    layer_stop_counts = []
     legacy = uses_legacy_audio_denominator(rvq_weights)
     for i, al in enumerate(res.audio_logits):
         al_flat = al.view(-1, al.size(-1))
@@ -66,6 +68,9 @@ def compute_batch_loss(res, labels, audio_labels, loss_fct, rvq_weights, audio_s
         weighted_loss = layer_loss * valid_mask * (1 + stop_mask * stop_multiplier)
         local_layer_sum = weighted_loss.sum()
         local_layer_count = valid_mask.sum()
+        local_stop_count = stop_mask.sum()
+        layer_counts.append(local_layer_count.detach())
+        layer_stop_counts.append(local_stop_count.detach())
         if local_layer_count > 0:
             if use_global:
                 stats = torch.stack([local_layer_sum, local_layer_count])
@@ -82,13 +87,69 @@ def compute_batch_loss(res, labels, audio_labels, loss_fct, rvq_weights, audio_s
     elif active_weights:
         weight_sum = sum(active_weights)
         audio_loss = sum(w * l for w, l in zip(active_weights, layer_means)) / (weight_sum + 1e-9)
-    return text_loss, audio_loss
+    if not return_details:
+        return text_loss, audio_loss
+
+    layer_loss_values = []
+    j = 0
+    for count in layer_counts:
+        if count.item() > 0:
+            layer_loss_values.append(layer_means[j])
+            j += 1
+        else:
+            layer_loss_values.append(None)
+    details = {
+        "rvq_layer_losses": layer_loss_values,
+        "rvq_layer_counts": layer_counts,
+        "rvq_stop_counts": layer_stop_counts,
+    }
+    return text_loss, audio_loss, details
+
+
+def tensor_to_float(value):
+    if value is None:
+        return None
+    if isinstance(value, torch.Tensor):
+        return float(value.detach().float().cpu().item())
+    return float(value)
+
+
+def details_to_metrics(details):
+    if not details:
+        return {}
+    losses = [None if v is None else round(tensor_to_float(v), 6) for v in details["rvq_layer_losses"]]
+    counts = [round(tensor_to_float(v), 2) for v in details["rvq_layer_counts"]]
+    stop_counts = [round(tensor_to_float(v), 2) for v in details["rvq_stop_counts"]]
+    stop_rates = [
+        round(stop / count, 6) if count > 0 else None
+        for stop, count in zip(stop_counts, counts)
+    ]
+    return {
+        "rvq_layer_losses": losses,
+        "rvq_layer_counts": counts,
+        "rvq_stop_counts": stop_counts,
+        "rvq_stop_rates": stop_rates,
+    }
+
+
+def assert_finite(name, tensor, epoch=None, step=None):
+    if isinstance(tensor, torch.Tensor) and not torch.isfinite(tensor.detach()).all():
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        where = f"rank={rank}"
+        if epoch is not None:
+            where += f", epoch={epoch + 1}"
+        if step is not None:
+            where += f", step={step}"
+        raise FloatingPointError(f"Non-finite {name} detected ({where})")
 
 
 @torch.no_grad()
 def evaluate_loader(loader, max_batches=None):
     model.eval()
     totals = torch.zeros(4, device=args.device, dtype=torch.float64)
+    rvq_loss_sums = torch.zeros(LEGACY_AUDIO_LAYERS, device=args.device, dtype=torch.float64)
+    rvq_counts = torch.zeros(LEGACY_AUDIO_LAYERS, device=args.device, dtype=torch.float64)
+    rvq_stop_counts = torch.zeros(LEGACY_AUDIO_LAYERS, device=args.device, dtype=torch.float64)
     loss_fct = nn.CrossEntropyLoss(reduction='none')
     for batch_idx, batch in enumerate(loader):
         if max_batches is not None and batch_idx >= max_batches:
@@ -108,24 +169,49 @@ def evaluate_loader(loader, max_batches=None):
         spk_emb = spk_emb.to(args.device)
         with autocast_ctx:
             res = model(input_ids, audio_inputs=audio_inputs, audio_lens=audio_lens, pixel_values=pixel_values, spk_emb=spk_emb)
-            text_loss, audio_loss = compute_batch_loss(
-                res, labels, audio_labels, loss_fct, rvq_weights, args.audio_stop_weight, args.loss_norm
+            text_loss, audio_loss, details = compute_batch_loss(
+                res, labels, audio_labels, loss_fct, rvq_weights, args.audio_stop_weight, args.loss_norm, return_details=True
             )
             batch_loss = text_loss + audio_loss + res.aux_loss
+        if args.finite_guard:
+            assert_finite("val_loss", batch_loss, step=batch_idx + 1)
         totals[0] += batch_loss.item()
         totals[1] += text_loss.item()
         totals[2] += audio_loss.item() if isinstance(audio_loss, torch.Tensor) else 0.0
         totals[3] += 1.0
+        for i, layer_loss in enumerate(details["rvq_layer_losses"]):
+            count = details["rvq_layer_counts"][i].detach().double()
+            if layer_loss is not None and count.item() > 0:
+                rvq_loss_sums[i] += layer_loss.detach().double() * count
+            rvq_counts[i] += count
+            rvq_stop_counts[i] += details["rvq_stop_counts"][i].detach().double()
     if dist.is_initialized():
         dist.all_reduce(totals, op=dist.ReduceOp.SUM)
+        dist.all_reduce(rvq_loss_sums, op=dist.ReduceOp.SUM)
+        dist.all_reduce(rvq_counts, op=dist.ReduceOp.SUM)
+        dist.all_reduce(rvq_stop_counts, op=dist.ReduceOp.SUM)
     model.train()
     if totals[3].item() == 0:
         return None
     count = totals[3].item()
+    layer_losses = [
+        round((rvq_loss_sums[i] / rvq_counts[i]).item(), 6) if rvq_counts[i].item() > 0 else None
+        for i in range(LEGACY_AUDIO_LAYERS)
+    ]
+    layer_counts = [round(v.item(), 2) for v in rvq_counts]
+    stop_counts = [round(v.item(), 2) for v in rvq_stop_counts]
+    stop_rates = [
+        round(stop / count, 6) if count > 0 else None
+        for stop, count in zip(stop_counts, layer_counts)
+    ]
     return {
         "loss": float(totals[0].item() / count),
         "text": float(totals[1].item() / count),
         "audio": float(totals[2].item() / count),
+        "rvq_layer_losses": layer_losses,
+        "rvq_layer_counts": layer_counts,
+        "rvq_stop_counts": stop_counts,
+        "rvq_stop_rates": stop_rates,
     }
 
 
@@ -189,12 +275,13 @@ def validate_equal_batch_count(dataset_len, batch_size, rank_sharded_data):
         raise ValueError(f"rank-sharded loaders have unequal batch counts: {stats}")
 
 
-def train_epoch(epoch, loader, iters, start_step=0, wandb=None, val_loader=None):
+def train_epoch(epoch, loader, iters, start_step=0, wandb=None, val_loader=None, max_steps=0):
     start_time = time.time()
     last_step = start_step
     world_size = dist.get_world_size() if dist.is_initialized() else 1
     global_batch = args.batch_size * world_size
     final_loss = final_text_loss = final_audio_loss = 0.0
+    final_details = {}
     warmup_steps = int(args.warmup_ratio * args.epochs * iters)
     total_steps = args.epochs * iters
     loss_fct = nn.CrossEntropyLoss(reduction='none')
@@ -220,10 +307,19 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None, val_loader=None)
 
         with autocast_ctx:
             res = model(input_ids, audio_inputs=audio_inputs, audio_lens=audio_lens, pixel_values=pixel_values, spk_emb=spk_emb)
-            text_loss, audio_loss = compute_batch_loss(
-                res, labels, audio_labels, loss_fct, rvq_weights, args.audio_stop_weight, args.loss_norm
+            text_loss, audio_loss, loss_details = compute_batch_loss(
+                res, labels, audio_labels, loss_fct, rvq_weights, args.audio_stop_weight, args.loss_norm, return_details=True
             )
             loss = (text_loss + audio_loss + res.aux_loss) / args.accumulation_steps
+
+        if args.finite_guard:
+            assert_finite("loss", loss, epoch, step)
+            assert_finite("text_loss", text_loss, epoch, step)
+            assert_finite("audio_loss", audio_loss, epoch, step)
+        if args.finite_guard_logits_interval > 0 and step % args.finite_guard_logits_interval == 0:
+            assert_finite("text_logits", res.logits, epoch, step)
+            for i, al in enumerate(res.audio_logits):
+                assert_finite(f"audio_logits[{i}]", al, epoch, step)
 
         scaler.scale(loss).backward()
         if step % args.accumulation_steps == 0:
@@ -239,24 +335,38 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None, val_loader=None)
             text_loss_val = text_loss.item() if isinstance(text_loss, torch.Tensor) else 0
             audio_loss_val = audio_loss.item() if isinstance(audio_loss, torch.Tensor) else 0
             final_loss, final_text_loss, final_audio_loss = current_loss, text_loss_val, audio_loss_val
+            final_details = details_to_metrics(loss_details)
             current_lr = optimizer.param_groups[-1]['lr']
             steps_done = step - start_step
             samples_per_sec = (steps_done * global_batch) / max(spend_time, 1e-9)
             eta_min = spend_time / max(steps_done, 1) * (iters - step) // 60
+            rvq_short = ""
+            rvq_losses = final_details.get("rvq_layer_losses")
+            if rvq_losses:
+                rvq_short = ", rvq0-3: " + ",".join(
+                    "nan" if v is None else f"{v:.3f}" for v in rvq_losses[:4]
+                )
             Logger(
                 f'Epoch:[{epoch+1}/{args.epochs}]({step}/{iters}), loss: {current_loss:.4f}, '
                 f'text: {text_loss_val:.4f}, audio: {audio_loss_val:.4f}, lr: {current_lr:.8f}, '
-                f'samples/sec: {samples_per_sec:.2f}, epoch_time: {eta_min:.1f}min'
+                f'samples/sec: {samples_per_sec:.2f}, epoch_time: {eta_min:.1f}min{rvq_short}'
             )
             if wandb:
-                wandb.log({
+                log_doc = {
                     "loss": current_loss,
                     "text_loss": text_loss_val,
                     "audio_loss": audio_loss_val,
                     "lr": current_lr,
                     "samples_per_sec": samples_per_sec,
                     "epoch_time": eta_min,
-                })
+                }
+                for i, value in enumerate(final_details.get("rvq_layer_losses", [])):
+                    if value is not None:
+                        log_doc[f"rvq_layer_{i}_loss"] = value
+                for i, value in enumerate(final_details.get("rvq_stop_rates", [])):
+                    if value is not None:
+                        log_doc[f"rvq_layer_{i}_stop_rate"] = value
+                wandb.log(log_doc)
 
         if val_loader and args.val_interval > 0 and step % args.val_interval == 0:
             last_val_metrics = evaluate_loader(val_loader)
@@ -286,6 +396,9 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None, val_loader=None)
             model.train()
 
         del input_ids, labels, audio_labels, audio_inputs, audio_lens, pixel_values, spk_emb, res, loss
+        if max_steps and (last_step - start_step) >= max_steps:
+            Logger(f'Epoch [{epoch + 1}/{args.epochs}]: reached max_train_steps={max_steps}, stopping early')
+            break
 
     if last_step > start_step and last_step % args.accumulation_steps != 0:
         scaler.unscale_(optimizer)
@@ -302,6 +415,7 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None, val_loader=None)
         "final_loss": round(final_loss, 4),
         "final_text_loss": round(final_text_loss, 4),
         "final_audio_loss": round(final_audio_loss, 4),
+        "final_detail_metrics": final_details,
         "elapsed_seconds": round(elapsed, 2),
         "samples_per_sec": round((steps_done * global_batch) / max(elapsed, 1e-9), 2),
         "val_metrics": last_val_metrics,
@@ -335,10 +449,23 @@ if __name__ == "__main__":
     parser.add_argument("--save_interval", type=int, default=1000, help="模型保存间隔")
     parser.add_argument('--hidden_size', default=768, type=int, help="隐藏层维度")
     parser.add_argument('--num_hidden_layers', default=8, type=int, help="隐藏层数量")
+    parser.add_argument('--num_attention_heads', default=None, type=int, help="Thinker attention heads；默认沿用模型配置")
+    parser.add_argument('--num_key_value_heads', default=None, type=int, help="Thinker KV heads；默认沿用模型配置")
+    parser.add_argument('--head_dim', default=None, type=int, help="Thinker head dim；默认 hidden_size/num_attention_heads")
+    parser.add_argument('--intermediate_size', default=None, type=int, help="Thinker FFN intermediate size；默认 ceil(hidden*pi/64)*64")
+    parser.add_argument('--num_talker_hidden_layers', default=None, type=int, help="Talker 层数；默认 OmniConfig")
+    parser.add_argument('--talker_hidden_size', default=None, type=int, help="Talker hidden size；默认 OmniConfig")
+    parser.add_argument('--talker_num_attention_heads', default=None, type=int, help="Talker attention heads；默认 Talker MiniMindConfig")
+    parser.add_argument('--talker_num_key_value_heads', default=None, type=int, help="Talker KV heads；默认 Talker MiniMindConfig")
+    parser.add_argument('--talker_head_dim', default=None, type=int, help="Talker head dim；默认 talker_hidden_size/talker_num_attention_heads")
+    parser.add_argument('--talker_intermediate_size', default=None, type=int, help="Talker FFN intermediate size；默认 ceil(talker_hidden*pi/64)*64")
+    parser.add_argument('--bridge_layer', default=None, type=int, help="Thinker -> Talker bridge layer；默认 num_hidden_layers//2-1")
+    parser.add_argument('--gradient_checkpointing', default=0, type=int, choices=[0, 1], help="是否启用 Transformer block 激活检查点以降低显存")
     parser.add_argument('--max_seq_len', default=512, type=int, help="训练的最大截断长度")
     parser.add_argument('--use_moe', default=0, type=int, choices=[0, 1], help="是否使用MoE架构")
     parser.add_argument("--data_path", type=str, default="../dataset/train_t2a_mini.parquet", help="训练数据路径（parquet格式）")
     parser.add_argument('--rank_sharded_data', default=0, type=int, choices=[0, 1], help="是否按DDP rank加载_full_shards中的parquet分片")
+    parser.add_argument('--ddp_broadcast_buffers', default=1, type=int, choices=[0, 1], help="DDP是否在forward前同步buffers；Transformer训练通常可关闭")
     parser.add_argument("--audio_encoder_dir", type=str, default="../model/SenseVoiceSmall", help="音频encoder路径(SenseVoice)")
     parser.add_argument("--vision_dir", type=str, default="../model/siglip2-base-p32-256-ve", help="CLIP视觉模型路径")
     parser.add_argument('--from_weight', default='llm', type=str, help="基于哪个权重训练，为none则不基于任何权重训练")
@@ -349,12 +476,15 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_project", type=str, default="MiniMind-O-SFT", help="wandb项目名")
     parser.add_argument("--wandb_run_name", type=str, default="", help="SwanLab run 名称；为空时使用自动命名")
     parser.add_argument("--metrics_path", type=str, default="", help="训练结束写入阶段指标 JSON 的路径")
+    parser.add_argument("--max_train_steps", type=int, default=0, help="本次 trainer 调用最多训练 N 个 step；0 表示不限制，用于显存 smoke")
     parser.add_argument("--warmup_ratio", type=float, default=0.0, help="LR warmup 占总 step 比例；0 表示关闭")
     parser.add_argument("--loss_norm", type=str, default="local", choices=["local", "global"], help="loss 归一化方式")
     parser.add_argument("--rvq_layer_weights", type=str, default="1,1,1,1,1,1,1,1", help="8 层 RVQ loss 权重，逗号分隔")
     parser.add_argument("--audio_stop_weight", type=float, default=10.0, help="audio stop token(2050) 相对权重")
     parser.add_argument("--val_data_path", type=str, default="", help="验证集 parquet 路径；为空则关闭 val loss")
     parser.add_argument("--val_interval", type=int, default=0, help="每 N step 跑一次 val loss；0 表示关闭")
+    parser.add_argument("--finite_guard", type=int, default=1, choices=[0, 1], help="是否检查 loss/val_loss 非有限值")
+    parser.add_argument("--finite_guard_logits_interval", type=int, default=0, help="每 N step 检查 logits 非有限值；0 表示关闭")
     parser.add_argument("--use_compile", default=0, type=int, choices=[0, 1], help="是否使用torch.compile加速（0=否，1=是）")
     args = parser.parse_args()
     if args.muon_lr is not None and args.muon_lr < 0:
@@ -369,11 +499,27 @@ if __name__ == "__main__":
 
     # ========== 2. 配置目录、模型参数、检查ckp ==========
     os.makedirs(args.save_dir, exist_ok=True)
-    omni_config = OmniConfig(
+    config_kwargs = dict(
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_hidden_layers,
-        use_moe=bool(args.use_moe)
+        use_moe=bool(args.use_moe),
+        gradient_checkpointing=bool(args.gradient_checkpointing),
     )
+    optional_config_args = {
+        "num_attention_heads": args.num_attention_heads,
+        "num_key_value_heads": args.num_key_value_heads,
+        "head_dim": args.head_dim,
+        "intermediate_size": args.intermediate_size,
+        "num_talker_hidden_layers": args.num_talker_hidden_layers,
+        "talker_hidden_size": args.talker_hidden_size,
+        "talker_num_attention_heads": args.talker_num_attention_heads,
+        "talker_num_key_value_heads": args.talker_num_key_value_heads,
+        "talker_head_dim": args.talker_head_dim,
+        "talker_intermediate_size": args.talker_intermediate_size,
+        "bridge_layer": args.bridge_layer,
+    }
+    config_kwargs.update({k: v for k, v in optional_config_args.items() if v is not None})
+    omni_config = OmniConfig(**config_kwargs)
     ckp_data = omni_checkpoint(omni_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume==1 else None
 
     # ========== 3. 设置混合精度 ==========
@@ -412,6 +558,12 @@ if __name__ == "__main__":
     log_model_params(model)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6
     Logger(f'Trainable: {trainable:.2f}M | Mode: {args.mode} | Freeze: {args.freeze_backbone} | Compile: {"on" if args.use_compile else "off"}')
+    Logger(
+        f'Arch: hidden={omni_config.hidden_size}, layers={omni_config.num_hidden_layers}, '
+        f'heads={omni_config.num_attention_heads}, kv={omni_config.num_key_value_heads}, '
+        f'ffn={omni_config.intermediate_size}, talker_hidden={omni_config.talker_hidden_size}, '
+        f'talker_layers={omni_config.num_talker_hidden_layers}, checkpointing={bool(args.gradient_checkpointing)}'
+    )
     Logger(f'Loss norm: {args.loss_norm} | Warmup ratio: {args.warmup_ratio} | RVQ weights: {args.rvq_layer_weights}')
 
     val_ds = None
@@ -460,7 +612,8 @@ if __name__ == "__main__":
 
     # ========== 7. DDP包模型 ==========
     if dist.is_initialized():
-        model = DistributedDataParallel(model, device_ids=[local_rank])
+        Logger(f'DDP broadcast_buffers={bool(args.ddp_broadcast_buffers)}')
+        model = DistributedDataParallel(model, device_ids=[local_rank], broadcast_buffers=bool(args.ddp_broadcast_buffers))
 
     # ========== 8. 开始训练 ==========
     training_start = time.time()
@@ -482,11 +635,16 @@ if __name__ == "__main__":
         loader = DataLoader(train_ds, batch_sampler=batch_sampler, collate_fn=omni_collate_fn, num_workers=args.num_workers, pin_memory=True)
         if skip > 0:
             Logger(f'Epoch [{epoch + 1}/{args.epochs}]: 跳过前{start_step}个step，从step {start_step + 1}开始')
-            metrics = train_epoch(epoch, loader, len(loader) + skip, start_step, wandb, val_loader)
+            remaining_steps = max(args.max_train_steps - total_steps, 0) if args.max_train_steps > 0 else 0
+            metrics = train_epoch(epoch, loader, len(loader) + skip, start_step, wandb, val_loader, remaining_steps)
         else:
-            metrics = train_epoch(epoch, loader, len(loader), 0, wandb, val_loader)
+            remaining_steps = max(args.max_train_steps - total_steps, 0) if args.max_train_steps > 0 else 0
+            metrics = train_epoch(epoch, loader, len(loader), 0, wandb, val_loader, remaining_steps)
         epoch_metrics.append(metrics)
         total_steps += metrics["steps"]
+        if args.max_train_steps > 0 and total_steps >= args.max_train_steps:
+            Logger(f'Training stopped early at max_train_steps={args.max_train_steps}')
+            break
 
     if is_main_process() and args.metrics_path:
         world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -499,16 +657,34 @@ if __name__ == "__main__":
             "epochs": args.epochs,
             "batch_size": args.batch_size,
             "global_batch_size": args.batch_size * world_size,
+            "effective_batch_size": args.batch_size * world_size * args.accumulation_steps,
+            "accumulation_steps": args.accumulation_steps,
             "learning_rate": args.learning_rate,
             "muon_lr": args.muon_lr,
+            "hidden_size": omni_config.hidden_size,
+            "num_hidden_layers": omni_config.num_hidden_layers,
+            "num_attention_heads": omni_config.num_attention_heads,
+            "num_key_value_heads": omni_config.num_key_value_heads,
+            "head_dim": omni_config.head_dim,
+            "intermediate_size": omni_config.intermediate_size,
+            "num_talker_hidden_layers": omni_config.num_talker_hidden_layers,
+            "talker_hidden_size": omni_config.talker_hidden_size,
+            "talker_num_attention_heads": omni_config.talker_num_attention_heads,
+            "talker_num_key_value_heads": omni_config.talker_num_key_value_heads,
+            "talker_head_dim": omni_config.talker_head_dim,
+            "talker_intermediate_size": omni_config.talker_intermediate_size,
+            "bridge_layer": omni_config.bridge_layer,
+            "gradient_checkpointing": bool(args.gradient_checkpointing),
             "data_path": args.data_path,
             "from_weight": args.from_weight,
             "total_steps": total_steps,
+            "max_train_steps": args.max_train_steps,
             "elapsed_seconds": round(total_elapsed, 2),
             "samples_per_sec": round((total_steps * args.batch_size * world_size) / max(total_elapsed, 1e-9), 2),
             "final_loss": last_epoch.get("final_loss"),
             "final_text_loss": last_epoch.get("final_text_loss"),
             "final_audio_loss": last_epoch.get("final_audio_loss"),
+            "final_detail_metrics": last_epoch.get("final_detail_metrics"),
             "epoch_metrics": epoch_metrics,
             "wandb_run_name": args.wandb_run_name or None,
             "warmup_ratio": args.warmup_ratio,
@@ -517,6 +693,8 @@ if __name__ == "__main__":
             "audio_stop_weight": args.audio_stop_weight,
             "val_data_path": args.val_data_path or None,
             "val_interval": args.val_interval,
+            "finite_guard": bool(args.finite_guard),
+            "finite_guard_logits_interval": args.finite_guard_logits_interval,
             "last_val_metrics": last_epoch.get("val_metrics"),
         }
         os.makedirs(os.path.dirname(os.path.abspath(args.metrics_path)), exist_ok=True)

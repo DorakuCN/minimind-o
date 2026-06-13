@@ -1,5 +1,6 @@
 import math, torch, torch.nn.functional as F
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 from transformers.activations import ACT2FN
 from transformers import PreTrainedModel, GenerationMixin, PretrainedConfig
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
@@ -19,6 +20,7 @@ class MiniMindConfig(PretrainedConfig):
         self.bos_token_id = kwargs.get("bos_token_id", 1)
         self.eos_token_id = kwargs.get("eos_token_id", 2)
         self.flash_attn = kwargs.get("flash_attn", True)
+        self.gradient_checkpointing = kwargs.get("gradient_checkpointing", False)
         self.num_attention_heads = kwargs.get("num_attention_heads", 8)
         self.num_key_value_heads = kwargs.get("num_key_value_heads", 4)
         self.head_dim = kwargs.get("head_dim", self.hidden_size // self.num_attention_heads)
@@ -218,14 +220,34 @@ class MiniMindModel(nn.Module):
             self.freqs_cos, self.freqs_sin = freqs_cos.to(hidden_states.device), freqs_sin.to(hidden_states.device)
         position_embeddings = (self.freqs_cos[start_pos:start_pos + seq_length], self.freqs_sin[start_pos:start_pos + seq_length])
         presents = []
+        checkpoint_layers = (
+            self.training
+            and self.config.gradient_checkpointing
+            and not use_cache
+            and all(past_key_value is None for past_key_value in past_key_values)
+        )
         for layer, past_key_value in zip(self.layers, past_key_values):
-            hidden_states, present = layer(
-                hidden_states,
-                position_embeddings,
-                past_key_value=past_key_value,
-                use_cache=use_cache,
-                attention_mask=attention_mask
-            )
+            if checkpoint_layers:
+                hidden_states = checkpoint(
+                    lambda h, layer=layer: layer(
+                        h,
+                        position_embeddings,
+                        past_key_value=None,
+                        use_cache=False,
+                        attention_mask=attention_mask,
+                    )[0],
+                    hidden_states,
+                    use_reentrant=False,
+                )
+                present = None
+            else:
+                hidden_states, present = layer(
+                    hidden_states,
+                    position_embeddings,
+                    past_key_value=past_key_value,
+                    use_cache=use_cache,
+                    attention_mask=attention_mask
+                )
             presents.append(present)
         hidden_states = self.norm(hidden_states)
         aux_loss = sum([l.mlp.aux_loss for l in self.layers if isinstance(l.mlp, MOEFeedForward)], hidden_states.new_zeros(1).squeeze())

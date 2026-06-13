@@ -1,0 +1,38 @@
+# Manual Review: baseline_A_t160 vs B3_himem_b88_t160
+
+- Generated: 2026-06-11 15:53:32
+- Reviewed: 2026-06-11 (AI-assisted review; text judged from full generated outputs, image grounding judged against the source images, audio column is an ASR-CER proxy, not human listening)
+- Run A: `eval_results/sft_full_muon_final_batch_audio_bf16_t160`
+- Run B: `eval_results/sft_full_muon_v2_himem_b88_final_batch_audio_bf16_t160`
+- A weight: `out/sft_full_muon_final_768.pth`
+- B weight: `out/sft_full_muon_v2_himem_b88_final_768.pth`
+
+Scoring guidance:
+
+- Winner: `A`, `B`, or `Tie`
+- I2A grounding score: `0` mostly wrong, `1` main object only, `2` mostly correct, `3` correct and specific
+- Audio score: `0` failed, `1` intelligible but poor, `2` usable, `3` good. Here mapped from SenseVoice CPU-batch CER: `<=0.15 -> 3`, `<=0.45 -> 2`, `<=0.65 -> 1`, `>0.65 -> 0`. This is still an ASR proxy, not human listening.
+
+## Verdict
+
+**A wins 5, B wins 5, Tie 3.** B3_himem_b88 is not a clear semantic win over baseline A at 160 tokens.
+
+- B is better at: Chinese text probes (`t2a_zh_intro_probe`), refusal quality (`a2a_en_food`), fruit-image grounding (`i2a_fruit`), health advice coherence, space fact relevance.
+- A is better at: physical/causal explanations (`a2a_en_sky_blue`, `a2a_zh_sky_blue_probe`), coffee procedures (both T2A and A2A), and `t2a_en_intro` where B is completely off-prompt.
+- Biggest B regression: `t2a_en_intro` produces an unrelated narrative sentence at both 96 and 160 tokens (identical text), while A answers the prompt perfectly.
+
+| id | type | prompt/media | A text | B text | winner | grounding | audio | notes |
+| --- | --- | --- | --- | --- | --- | ---: | ---: | --- |
+| `a2a_en_coffee` | audio | dataset/eval_omni/audio-en-12_how_do_i_make_a_good_cup_of_coffee.mp3 | To make a good cup of coffee, start by boiling water to a gentle steam. Add half a cup of coffee, soak it in water for about 8 minutes. Then, pour in the half of the cup. Close the | To make a good cup of coffee, start by brewing a cup of coffee. Brew a cup of milk in a glass, let it cool, and then pour it into a cooling glass. Add two tablespoons of coffee per | A |  | A1/B1 | Both procedures flawed; A is closer to real steeping, B mixes milk/cooling-glass steps incoherently. |
+| `a2a_en_food` | audio | dataset/eval_omni/audio-en-01_what_do_you_usually_like_to_eat.mp3 | As an AI language model, I don't eat, so I don't eat, taste, or have any personal preferences. | I don't have a physical body, but I can help you with a variety of recipes. | B |  | A3/B3 | A repeats "I don't eat"; B is a clean refusal with a helpful offer. |
+| `a2a_en_sky_blue` | audio | dataset/eval_omni/audio-en-05_why_is_the_sky_blue.mp3 | The sky is typically blue due to the way Earth's atmosphere scatters sunlight. During this time, the sunlight blows more of the Earth's atmosphere, causing different colors to be s | The sky blue is due to the sunrise or sunset, when the Earth's equatorial tilt slows down, and the sun is not directly overhead. This tilt is typically caused by the movement of th | A |  | A2/B2 | A approximates atmospheric scattering; B's "equatorial tilt slows down" is entirely wrong physics. |
+| `a2a_zh_sky_blue_probe` | audio | dataset/eval_omni/audio-zh-05_为什么天空是蓝色的.mp3 | 因为大气中的氮气、氧气和水蒸气等气体分子会散射太阳光的蓝色光，使天空呈现出蓝色。 | 天空之所以呈现蓝色，是因为太阳光的散射作用。太阳光中的蓝色光最容易与空气中的气体和污染物分子相互作用，产生蓝色光波长较短的红光，因此我们看到的天空呈现蓝色。 | A |  | A3/B2 | A is concise and essentially correct; B starts correctly but self-contradicts ("蓝色光…产生…红光"). |
+| `i2a_cat_untrained_probe` | image | Please describe this image. | This image depicts a vibrant and energetic scene featuring a tiny cat standing in the foreground on a rooftop. The cat appears to be in a state of curiosity or excitement, as its f | This image features a cat sitting on a red lamp with a black and white patterned design. The cat's fur is predominantly brown with a mix of brown and black patches, and it seems to | Tie | A1/B1 | A1/B1 | Image: orange cat on a desk by a window with a full moon. A gets the orange color but invents a rooftop; B gets the desk/indoor setting but wrong fur color plus a red-lamp hallucination. |
+| `i2a_fruit_untrained_probe` | image | Please describe this image. | The image shows a close-up of a yellow fruit slice, likely a peach, with a focus on the banana and apple. The fruit slice has a distinctive honey-layered appearance with visible ch | This image showcases a variety of fruits on a white surface, which could be a table or countertop. In the foreground, there are several bananas, with their distinctive yellow color | B | A1/B2 | A1/B1 | Image: basket of apples, bananas, oranges on a white table. B correctly gets fruits-on-white-surface and bananas (hallucinates berries, misses apples/oranges); A describes a nonexistent "fruit slice/peach". |
+| `t2a_en_coffee` | text | How do I make a good cup of coffee? | To make a good cup of coffee, start by using one cup of water. Add a slice of your favorite beverage and mix it with a bit of sugar to create a rich coffee taste. Pour the water in | To make a good cup of coffee, start by brewing a cup of espresso. Then, cool and pour it into a cooling glass. Place the coffee in the freezer of a cup, then transfer the coffee to | A |  | A2/B2 | A is odd but vaguely plausible; B repeatedly freezes the coffee, a clear procedural hallucination. |
+| `t2a_en_health` | text | How can I maintain a healthy lifestyle? | Maintaining a healthy lifestyle involves several key steps. First, set clear, achievable goals, such as reducing your expense, eating a balanced diet, and exercising regularly. Sec | Maintaining a healthy lifestyle involves a few key habits. Firstly, prioritize balanced diet and regular exercise. Ensure you get enough sleep, as it is essential for overall well- | B |  | A0/B1 | B's habit list (diet, exercise, sleep, hydration, stress, social) is more coherent; A has "reducing your expense" and repeats items. |
+| `t2a_en_intro` | text | Please introduce yourself in one short sentence. | Hello! I'm your friendly voice assistant, here to help you with your questions and provide support. | She always spotted an animal, the sun was filtered through the canopy, and the sunset was painted with warm hues of orange, pink, and purple. | A |  | A3/B3 | Clear B regression: completely off-prompt narrative, identical at 96 and 160 tokens; A answers perfectly. |
+| `t2a_en_joke` | text | Tell me a short joke. | Why don't scientists trust atoms? Because they make up everything! | Why don't scientists trust atoms? Because they make up everything! | Tie |  | A3/B3 | Identical output. |
+| `t2a_en_space` | text | Tell me one interesting fact about space. | A single-sequence moon is a gas giant primarily composed of gases like�as and nitrogen, which are formed from the release of small particles and water vapor in the atmosphere. | One interesting fact about space is the universe's ability to formed by the Big Bang theory. It was launched by the Big Bang theory, which states that the universe had been expandi | B |  | A3/B3 | A is incoherent and contains a mojibake character; B is grammatically broken but on-topic (Big Bang/expansion). |
+| `t2a_zh_intro_probe` | text | 请用一句话介绍你自己。 | 我是一个AI模型，没有感官和情感，无法体验和体验人类的本质。 | 我是一种由算法和数据组成的计算机程序，通过学习和训练来理解和处理人类语言，具有较强的计算能力和良好的学习能力。 | B |  | A3/B3 | B is a coherent self-description; A repeats "体验" and ends oddly. |
+| `t2a_zh_spring_probe` | text | 请用一句话介绍一下春天。 | 春天是一年中最温暖、最繁荣的季节，万物复苏，生机盎然。 | 春天是一年四季中最美丽的季节之一，标志着万物复苏、万物更新和生命力强。 | Tie |  | A3/B3 | Both acceptable one-sentence answers; B slightly repetitive ("万物复苏、万物更新"), A slightly more natural. |

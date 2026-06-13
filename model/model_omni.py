@@ -2,6 +2,7 @@ import os, math, torch, soundfile as sf, librosa, warnings, numpy as np, onnxrun
 from types import SimpleNamespace
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 from transformers import SiglipImageProcessor, SiglipVisionModel, logging as hf_logging
 from .model_minimind import *
@@ -13,6 +14,10 @@ class OmniConfig(MiniMindConfig):
         super().__init__(**kwargs)
         self.num_talker_hidden_layers = kwargs.get("num_talker_hidden_layers", 4)
         self.talker_hidden_size = kwargs.get("talker_hidden_size", 768)
+        self.talker_num_attention_heads = kwargs.get("talker_num_attention_heads", None)
+        self.talker_num_key_value_heads = kwargs.get("talker_num_key_value_heads", None)
+        self.talker_head_dim = kwargs.get("talker_head_dim", None)
+        self.talker_intermediate_size = kwargs.get("talker_intermediate_size", None)
         self.audio_ids = kwargs.get("audio_ids", [16]) # "<|audio_pad|>" token id
         self.audio_special_token = kwargs.get("audio_special_token", "<|audio_pad|>")
         self.audio_hidden_size = kwargs.get("audio_hidden_size", 512)
@@ -88,7 +93,19 @@ class SenseVoiceAudioProcessor:
 class TalkerModule(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.talker_config = MiniMindConfig(hidden_size=config.talker_hidden_size, use_moe=config.use_moe)
+        talker_kwargs = {
+            "hidden_size": config.talker_hidden_size,
+            "use_moe": config.use_moe,
+            "gradient_checkpointing": config.gradient_checkpointing,
+        }
+        optional_kwargs = {
+            "num_attention_heads": config.talker_num_attention_heads,
+            "num_key_value_heads": config.talker_num_key_value_heads,
+            "head_dim": config.talker_head_dim,
+            "intermediate_size": config.talker_intermediate_size,
+        }
+        talker_kwargs.update({k: v for k, v in optional_kwargs.items() if v is not None})
+        self.talker_config = MiniMindConfig(**talker_kwargs)
         self.layers = nn.ModuleList([MiniMindBlock(l, self.talker_config) for l in range(config.num_talker_hidden_layers)])
         self.norm = RMSNorm(config.talker_hidden_size, eps=config.rms_norm_eps)
         self.lm_head = TalkerHead(config.talker_hidden_size, config.audio_vocab_size)
@@ -286,8 +303,28 @@ class MiniMindOmni(MiniMindForCausalLM):
                 ], dim=stack_dim)
             hidden_states = self.count_vision_proj(tokens=text_ids, h=hidden_states, vision_tensors=vision_tensors, seqlen=seq_length)
         bridge_states = hidden_states
+        thinker_checkpoint_layers = (
+            self.training
+            and self.config.gradient_checkpointing
+            and not use_cache
+            and all(past_key_value is None for past_key_value in past_key_values[:n_thinker])
+        )
         for i, (layer, past_key_value) in enumerate(zip(self.thinker.layers, past_key_values[:n_thinker])):
-            hidden_states, present = layer(hidden_states, position_embeddings, past_key_value=past_key_value, use_cache=use_cache, attention_mask=attention_mask)
+            if thinker_checkpoint_layers:
+                hidden_states = checkpoint(
+                    lambda h, layer=layer: layer(
+                        h,
+                        position_embeddings,
+                        past_key_value=None,
+                        use_cache=False,
+                        attention_mask=attention_mask,
+                    )[0],
+                    hidden_states,
+                    use_reentrant=False,
+                )
+                present = None
+            else:
+                hidden_states, present = layer(hidden_states, position_embeddings, past_key_value=past_key_value, use_cache=use_cache, attention_mask=attention_mask)
             presents.append(present)
             if i == self.config.bridge_layer: bridge_states = hidden_states
         h_thinker = self.thinker.norm(hidden_states)
@@ -300,8 +337,28 @@ class MiniMindOmni(MiniMindForCausalLM):
             talker_emb = torch.where(spk_mask, self.talker.spk_proj(spk_emb).unsqueeze(1), talker_emb)
         hidden_states = self.talker.embed_proj(bridge_states) * self.talker.text_scale + self.talker.codec_proj(talker_emb) * self.talker.audio_scale
         talker_pos_emb = (self.talker.freqs_cos[start_pos:start_pos + seq_length], self.talker.freqs_sin[start_pos:start_pos + seq_length])
+        talker_checkpoint_layers = (
+            self.training
+            and self.config.gradient_checkpointing
+            and not use_cache
+            and all(past_key_value is None for past_key_value in past_key_values[n_thinker:])
+        )
         for layer, past_key_value in zip(self.talker.layers, past_key_values[n_thinker:]):
-            hidden_states, present = layer(hidden_states, talker_pos_emb, past_key_value=past_key_value, use_cache=use_cache, attention_mask=attention_mask)
+            if talker_checkpoint_layers:
+                hidden_states = checkpoint(
+                    lambda h, layer=layer: layer(
+                        h,
+                        talker_pos_emb,
+                        past_key_value=None,
+                        use_cache=False,
+                        attention_mask=attention_mask,
+                    )[0],
+                    hidden_states,
+                    use_reentrant=False,
+                )
+                present = None
+            else:
+                hidden_states, present = layer(hidden_states, talker_pos_emb, past_key_value=past_key_value, use_cache=use_cache, attention_mask=attention_mask)
             presents.append(present)
         h_talker = self.talker.norm(hidden_states)
 
@@ -317,13 +374,16 @@ class MiniMindOmni(MiniMindForCausalLM):
 
     @torch.inference_mode()
     def generate(self, input_ids, eos_token_id=2, max_new_tokens=1024, temperature=0.75, top_p=0.90,
-                 stream=False, rp=1., use_cache=True, return_audio_codes=False, **args):
+                 stream=False, rp=1., use_cache=True, return_audio_codes=False, no_repeat_ngram_size=0, **args):
         if stream:
-            return self.stream_generate(input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache, return_audio_codes, **args)
-        tokens = list(self.stream_generate(input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache, return_audio_codes, **args))
+            return self.stream_generate(input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp,
+                                        use_cache, return_audio_codes, no_repeat_ngram_size, **args)
+        tokens = list(self.stream_generate(input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp,
+                                           use_cache, return_audio_codes, no_repeat_ngram_size, **args))
         return tokens[-1] if tokens else input_ids
 
-    def stream_generate(self, input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache, return_audio_codes=False, **args):
+    def stream_generate(self, input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache,
+                        return_audio_codes=False, no_repeat_ngram_size=0, **args):
         start_pos, past_kvs, text_finished, first_finished = input_ids.shape[1], None, False, True
         audio_codes = [[] for _ in range(8)]
         audio_stop_pos = [None] * 8
@@ -349,6 +409,18 @@ class MiniMindOmni(MiniMindForCausalLM):
             logits = out.logits[0, -1, :].clone().float() / (temperature + 1e-9)
             if rp != 1.0:
                 seen = list(set(input_ids[0].tolist())); score = logits[seen]; logits[seen] = torch.where(score > 0, score / rp, score * rp)
+            if no_repeat_ngram_size and no_repeat_ngram_size > 1:
+                generated = input_ids[0, start_pos:].tolist()
+                n = no_repeat_ngram_size
+                if len(generated) >= n - 1:
+                    prefix = tuple(generated[-(n - 1):])
+                    banned = [
+                        generated[i + n - 1]
+                        for i in range(len(generated) - n + 1)
+                        if tuple(generated[i:i + n - 1]) == prefix
+                    ]
+                    if banned:
+                        logits[list(set(banned))] = -float('Inf')
             if top_p and top_p < 1.0:
                 sorted_l, sorted_i = torch.sort(logits, descending=True)
                 mask = torch.cumsum(F.softmax(sorted_l, dim=-1), dim=-1) > top_p

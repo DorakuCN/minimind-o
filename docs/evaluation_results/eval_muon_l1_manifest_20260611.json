@@ -1,0 +1,1073 @@
+{
+  "generated_at": "2026-06-11 16:16:10",
+  "root": "/home/genesis/Projects/minimind-o",
+  "test_set": {
+    "path": "dataset/eval_muon_l1.jsonl",
+    "bytes": 12231,
+    "sha256": "6bc25192f3ceb414321e04c99106975f493eb60eeb5effa6e6a208e82fb4b76f"
+  },
+  "case_count": 57,
+  "cases": [
+    {
+      "id": "t2a_en_intro",
+      "type": "text",
+      "prompt": "Please introduce yourself in one short sentence.",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 1
+    },
+    {
+      "id": "t2a_en_joke",
+      "type": "text",
+      "prompt": "Tell me a short joke.",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 2
+    },
+    {
+      "id": "t2a_en_space",
+      "type": "text",
+      "prompt": "Tell me one interesting fact about space.",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 3
+    },
+    {
+      "id": "t2a_en_coffee",
+      "type": "text",
+      "prompt": "How do I make a good cup of coffee?",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 4
+    },
+    {
+      "id": "t2a_en_health",
+      "type": "text",
+      "prompt": "How can I maintain a healthy lifestyle?",
+      "tags": [
+        "t2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 5
+    },
+    {
+      "id": "t2a_zh_intro_probe",
+      "type": "text",
+      "prompt": "请用一句话介绍你自己。",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 6
+    },
+    {
+      "id": "t2a_zh_spring_probe",
+      "type": "text",
+      "prompt": "请用一句话介绍一下春天。",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 7
+    },
+    {
+      "id": "a2a_en_food",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-01_what_do_you_usually_like_to_eat.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 8
+    },
+    {
+      "id": "a2a_en_sky_blue",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-05_why_is_the_sky_blue.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 9
+    },
+    {
+      "id": "a2a_en_coffee",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-12_how_do_i_make_a_good_cup_of_coffee.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 10
+    },
+    {
+      "id": "a2a_zh_sky_blue_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-05_为什么天空是蓝色的.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 11
+    },
+    {
+      "id": "i2a_cat_untrained_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-01-orange-cat-moon-desk.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 12
+    },
+    {
+      "id": "i2a_fruit_untrained_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-02-fruit-basket-apples-bananas-oranges.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l0"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 13
+    },
+    {
+      "id": "t2a_en_intro_v2",
+      "type": "text",
+      "prompt": "Who are you?",
+      "tags": [
+        "t2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 10,
+      "min_audio_frames": 8,
+      "_line": 14
+    },
+    {
+      "id": "t2a_en_intro_v3",
+      "type": "text",
+      "prompt": "What can you do? Answer in one short sentence.",
+      "tags": [
+        "t2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 10,
+      "min_audio_frames": 8,
+      "_line": 15
+    },
+    {
+      "id": "t2a_en_count",
+      "type": "text",
+      "prompt": "Count from one to five.",
+      "tags": [
+        "t2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 9,
+      "min_audio_frames": 8,
+      "_line": 16
+    },
+    {
+      "id": "t2a_en_colors",
+      "type": "text",
+      "prompt": "Name three colors.",
+      "tags": [
+        "t2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 10,
+      "min_audio_frames": 8,
+      "_line": 17
+    },
+    {
+      "id": "t2a_en_sky_blue",
+      "type": "text",
+      "prompt": "Why is the sky blue?",
+      "tags": [
+        "t2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 18
+    },
+    {
+      "id": "t2a_en_black_hole",
+      "type": "text",
+      "prompt": "What is a black hole?",
+      "tags": [
+        "t2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 19
+    },
+    {
+      "id": "t2a_en_stars_twinkle",
+      "type": "text",
+      "prompt": "Why do stars twinkle?",
+      "tags": [
+        "t2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 20
+    },
+    {
+      "id": "t2a_en_snow_winter",
+      "type": "text",
+      "prompt": "Why does it snow in winter?",
+      "tags": [
+        "t2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 21
+    },
+    {
+      "id": "t2a_en_study",
+      "type": "text",
+      "prompt": "How can I improve my study efficiency?",
+      "tags": [
+        "t2a",
+        "english",
+        "procedure",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 22
+    },
+    {
+      "id": "t2a_en_cat_story",
+      "type": "text",
+      "prompt": "Please tell me a short story about a little cat.",
+      "tags": [
+        "t2a",
+        "english",
+        "creative",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 30,
+      "min_audio_frames": 8,
+      "_line": 23
+    },
+    {
+      "id": "t2a_zh_who_probe",
+      "type": "text",
+      "prompt": "你是谁？",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 4,
+      "min_audio_frames": 8,
+      "_line": 24
+    },
+    {
+      "id": "t2a_zh_sky_blue_probe",
+      "type": "text",
+      "prompt": "为什么天空是蓝色的？",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 25
+    },
+    {
+      "id": "t2a_zh_black_hole_probe",
+      "type": "text",
+      "prompt": "什么是黑洞？",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 26
+    },
+    {
+      "id": "t2a_zh_summer_probe",
+      "type": "text",
+      "prompt": "请用一句话介绍一下夏天。",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 27
+    },
+    {
+      "id": "t2a_zh_health_probe",
+      "type": "text",
+      "prompt": "如何保持健康的生活方式？",
+      "tags": [
+        "t2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 28
+    },
+    {
+      "id": "t2a_zh_count_probe",
+      "type": "text",
+      "prompt": "请从一数到五。",
+      "tags": [
+        "t2a",
+        "chinese",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 4,
+      "min_audio_frames": 8,
+      "_line": 29
+    },
+    {
+      "id": "a2a_en_ai_fields",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-02_what_fields_does_artificial_intelligence_include.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 30
+    },
+    {
+      "id": "a2a_en_cat_story",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-03_please_tell_me_a_story_about_a_little_cat.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "creative",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 31
+    },
+    {
+      "id": "a2a_en_spring",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-04_please_introduce_spring_in_one_sentence.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 32
+    },
+    {
+      "id": "a2a_en_health",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-06_how_can_we_maintain_a_healthy_lifestyle.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 33
+    },
+    {
+      "id": "a2a_en_black_hole",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-07_what_is_a_black_hole.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 34
+    },
+    {
+      "id": "a2a_en_cats_mice",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-08_why_do_cats_like_catching_mice.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 35
+    },
+    {
+      "id": "a2a_en_study",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-09_how_can_i_improve_my_study_efficiency.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "procedure",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 36
+    },
+    {
+      "id": "a2a_en_animals",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-10_how_many_kinds_of_animals_are_there_on_earth.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "in_domain",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 37
+    },
+    {
+      "id": "a2a_en_snow",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-11_why_does_it_snow_in_winter.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 38
+    },
+    {
+      "id": "a2a_en_quantum",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-13_what_is_quantum_mechanics.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 39
+    },
+    {
+      "id": "a2a_en_stars",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-en-14_why_do_stars_twinkle.mp3",
+      "tags": [
+        "a2a",
+        "english",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 40
+    },
+    {
+      "id": "a2a_zh_food_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-01_你平时喜欢吃什么.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 41
+    },
+    {
+      "id": "a2a_zh_ai_fields_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-02_人工智能包含哪些领域.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 42
+    },
+    {
+      "id": "a2a_zh_cat_story_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-03_给我讲一个关于小猫的故事吧.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "creative",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 43
+    },
+    {
+      "id": "a2a_zh_spring_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-04_请用一句话介绍一下春天.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 44
+    },
+    {
+      "id": "a2a_zh_health_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-06_如何保持健康的生活方式.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "out_of_domain_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 45
+    },
+    {
+      "id": "a2a_zh_black_hole_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-07_什么是黑洞.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 46
+    },
+    {
+      "id": "a2a_zh_snow_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-11_为什么冬天会下雪.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "physics",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 47
+    },
+    {
+      "id": "a2a_zh_coffee_probe",
+      "type": "audio",
+      "audio_path": "dataset/eval_omni/audio-zh-12_如何制作一杯美味的咖啡.mp3",
+      "tags": [
+        "a2a",
+        "chinese",
+        "procedure",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 8,
+      "min_audio_frames": 8,
+      "_line": 48
+    },
+    {
+      "id": "i2a_panda_sign_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-03-panda-holding-hello-sign.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 49
+    },
+    {
+      "id": "i2a_astronaut_bicycle_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-04-astronaut-riding-bicycle.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 50
+    },
+    {
+      "id": "i2a_robot_chef_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-05-robot-chef-making-breakfast.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 51
+    },
+    {
+      "id": "i2a_dinosaur_toy_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-06-green-dinosaur-toy-balloons.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 52
+    },
+    {
+      "id": "i2a_dog_scarf_snow_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-07-golden-retriever-red-scarf-snow.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 53
+    },
+    {
+      "id": "i2a_coffee_laptop_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-08-coffee-cup-laptop.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 54
+    },
+    {
+      "id": "i2a_rabbit_grass_probe",
+      "type": "image",
+      "prompt": "Please describe this image.",
+      "image_path": "dataset/eval_omni/image-09-white-rabbit-grass.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "untrained_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 55
+    },
+    {
+      "id": "i2a_cat_question_probe",
+      "type": "image",
+      "prompt": "What objects are in this picture?",
+      "image_path": "dataset/eval_omni/image-01-orange-cat-moon-desk.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 56
+    },
+    {
+      "id": "i2a_fruit_question_probe",
+      "type": "image",
+      "prompt": "What fruits do you see in this image?",
+      "image_path": "dataset/eval_omni/image-02-fruit-basket-apples-bananas-oranges.jpg",
+      "tags": [
+        "i2a",
+        "english",
+        "instruction_probe",
+        "l1"
+      ],
+      "expect_audio": true,
+      "min_chars": 20,
+      "min_audio_frames": 8,
+      "_line": 57
+    }
+  ],
+  "files": [
+    {
+      "path": "dataset/eval_omni/audio-en-01_what_do_you_usually_like_to_eat.mp3",
+      "exists": true,
+      "bytes": 5924,
+      "sha256": "963e9b3a3832360c8f828435914c1ebb368aa1061ea2f86cafd11a93aab33a6a"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-05_why_is_the_sky_blue.mp3",
+      "exists": true,
+      "bytes": 5420,
+      "sha256": "b2ac22cdfaf81bd65dd6c7055c139d3ae519cf176c7ca2f2d89dd90899d2787f"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-12_how_do_i_make_a_good_cup_of_coffee.mp3",
+      "exists": true,
+      "bytes": 5924,
+      "sha256": "1b58b3276281352d4d258ec91bda35d8de224bf61a79124e270f2ca37087cde4"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-05_为什么天空是蓝色的.mp3",
+      "exists": true,
+      "bytes": 4268,
+      "sha256": "6bc9b6ad95892b9fc1040d905eb2e3c0cf79397a4da7d06c314fa1c33a61b1e7"
+    },
+    {
+      "path": "dataset/eval_omni/image-01-orange-cat-moon-desk.jpg",
+      "exists": true,
+      "bytes": 17712,
+      "sha256": "fd2898ecc7a73cbf16d9c6f3ded1c59f176e6e8868a4c7699f814d6aba18f19a"
+    },
+    {
+      "path": "dataset/eval_omni/image-02-fruit-basket-apples-bananas-oranges.jpg",
+      "exists": true,
+      "bytes": 14376,
+      "sha256": "b9d11538c3c404aaee7104b0ac8c6de73d14f834e52ad7efe0c34d61928d1359"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-02_what_fields_does_artificial_intelligence_include.mp3",
+      "exists": true,
+      "bytes": 9020,
+      "sha256": "2002c3ee7fa1ce8af664a3ba94e0039d551e78da2706707e0dfe338b1344ee2f"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-03_please_tell_me_a_story_about_a_little_cat.mp3",
+      "exists": true,
+      "bytes": 7868,
+      "sha256": "3864c606527fc55e8105dcd00dc6a0005efec782e3683c54f43f4024eea736e2"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-04_please_introduce_spring_in_one_sentence.mp3",
+      "exists": true,
+      "bytes": 10028,
+      "sha256": "6b44a4b5b206a4f8300a8cb735b7bca965b0aba85a47559a6d8106d8007a23f4"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-06_how_can_we_maintain_a_healthy_lifestyle.mp3",
+      "exists": true,
+      "bytes": 6860,
+      "sha256": "8b64eb67f2ad5d631de1986fad23321ede5e4011d63d3b6c880a4e1d54633753"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-07_what_is_a_black_hole.mp3",
+      "exists": true,
+      "bytes": 3980,
+      "sha256": "0239e5ff07d51f5a15c6d70748b498c95e2f1eeea4cd8b55ba45ad27c4526566"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-08_why_do_cats_like_catching_mice.mp3",
+      "exists": true,
+      "bytes": 6644,
+      "sha256": "4f6c6d5b0214bd4839b2a4a99ba2f90bbe4844d878bbe8db920e5a5281cfd977"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-09_how_can_i_improve_my_study_efficiency.mp3",
+      "exists": true,
+      "bytes": 7868,
+      "sha256": "2d7c3af82e88f15696ed0b896cef144ecd55d41c6780e1772de77ffa3c262e04"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-10_how_many_kinds_of_animals_are_there_on_earth.mp3",
+      "exists": true,
+      "bytes": 8804,
+      "sha256": "9f9a390a8c875d27e0468282fda4cf52e8d8d04a101ee962da348f2d7762fbe0"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-11_why_does_it_snow_in_winter.mp3",
+      "exists": true,
+      "bytes": 5708,
+      "sha256": "a7a4ac47e6bc2df58d2275543ad490b8152c723de897a3b50324e65705365080"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-13_what_is_quantum_mechanics.mp3",
+      "exists": true,
+      "bytes": 5708,
+      "sha256": "89e56692397cee94b546fbca14a161178d23c109f925ebd621aafe08cb9ba4c9"
+    },
+    {
+      "path": "dataset/eval_omni/audio-en-14_why_do_stars_twinkle.mp3",
+      "exists": true,
+      "bytes": 4700,
+      "sha256": "79106ed225bd9907e3f6ec03f09d2abac289f12068725774996c525339f7fb95"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-01_你平时喜欢吃什么.mp3",
+      "exists": true,
+      "bytes": 4484,
+      "sha256": "ce106efd77980ba102ec0ba4c1cbc846bc4932fd11a8e0bd37f3fcbcba1851be"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-02_人工智能包含哪些领域.mp3",
+      "exists": true,
+      "bytes": 7148,
+      "sha256": "7cee9a7d7b1aa8f141a50d96ff97caa97962f17944975311c633bd6c1173f0e5"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-03_给我讲一个关于小猫的故事吧.mp3",
+      "exists": true,
+      "bytes": 6644,
+      "sha256": "998a0aae9ef8c44a31abd913bce35822c541a46012fdbc6c0a4261a03ac5de62"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-04_请用一句话介绍一下春天.mp3",
+      "exists": true,
+      "bytes": 7364,
+      "sha256": "0483c45a2ff1846df55b5990fe161215bfa873394df216f25dea739cfbf16b88"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-06_如何保持健康的生活方式.mp3",
+      "exists": true,
+      "bytes": 4700,
+      "sha256": "2688ef2931efc054c823aa1e261a8cd748b94326c290cbe251b21898cfd12f8d"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-07_什么是黑洞.mp3",
+      "exists": true,
+      "bytes": 2828,
+      "sha256": "451cee8d342cc3ec4ee30f9492ed0f252f551b7997eecc381082068d9ccd2dda"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-11_为什么冬天会下雪.mp3",
+      "exists": true,
+      "bytes": 4484,
+      "sha256": "a87f754c18bbf016245eeb74a6a881e6716fdbfce3f563d08c9976e6a5a2c1f6"
+    },
+    {
+      "path": "dataset/eval_omni/audio-zh-12_如何制作一杯美味的咖啡.mp3",
+      "exists": true,
+      "bytes": 5420,
+      "sha256": "1a8c852993eba8d96208ae4dc23a8960213344e40ab946ceeb9c0917f4cd3fcc"
+    },
+    {
+      "path": "dataset/eval_omni/image-03-panda-holding-hello-sign.jpg",
+      "exists": true,
+      "bytes": 25939,
+      "sha256": "4a352a833d7fbdbd5db390b49be220bcf667858a4c9888a9491870d5a36783cd"
+    },
+    {
+      "path": "dataset/eval_omni/image-04-astronaut-riding-bicycle.jpg",
+      "exists": true,
+      "bytes": 30180,
+      "sha256": "1705e0077e8f97d71ef473d2bf7e838335aa17884258e67ead7b073888c8b01e"
+    },
+    {
+      "path": "dataset/eval_omni/image-05-robot-chef-making-breakfast.jpg",
+      "exists": true,
+      "bytes": 14382,
+      "sha256": "6875bfb88b0db5072dfd8c871c470a662c0a60c36047537469f5e2670a861e90"
+    },
+    {
+      "path": "dataset/eval_omni/image-06-green-dinosaur-toy-balloons.jpg",
+      "exists": true,
+      "bytes": 19625,
+      "sha256": "0002962c08d6dbb48c129a2d543e9e5504e3a7f0473034ed016266e05723fd3a"
+    },
+    {
+      "path": "dataset/eval_omni/image-07-golden-retriever-red-scarf-snow.jpg",
+      "exists": true,
+      "bytes": 13643,
+      "sha256": "dd9996eb0c9b156817a541fef81a91bb428d4076bdbc18d305216a0c880de2d2"
+    },
+    {
+      "path": "dataset/eval_omni/image-08-coffee-cup-laptop.jpg",
+      "exists": true,
+      "bytes": 17634,
+      "sha256": "aae8752c8af6ef2e4feb65f96b804842cb2bd16989584908c68bf560d353ecee"
+    },
+    {
+      "path": "dataset/eval_omni/image-09-white-rabbit-grass.jpg",
+      "exists": true,
+      "bytes": 20596,
+      "sha256": "a5c6c3290921676a51bf99bc87072a9004cbbb681732653d704964b7dfcd3620"
+    }
+  ],
+  "missing_files": []
+}
